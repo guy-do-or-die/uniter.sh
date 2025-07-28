@@ -1,88 +1,19 @@
-import { createPublicClient, http, PublicClient } from 'viem';
-import { mainnet, polygon, arbitrum, optimism, base, bsc } from 'viem/chains';
+import { createPublicClient, http, PublicClient, Chain } from 'viem';
+import * as chains from 'viem/chains';
 
-// Chain configuration interface
-export interface ChainConfig {
-  id: number;
-  name: string;
-  viemChain: any;
-  rpcUrl: string;
-  nativeCurrency: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-}
-
-// Supported chains configuration
-export const SUPPORTED_CHAINS: Record<string, ChainConfig> = {
-  ethereum: {
-    id: 1,
-    name: 'Ethereum',
-    viemChain: mainnet,
-    rpcUrl: 'https://eth.llamarpc.com',
-    nativeCurrency: {
-      name: 'Ether',
-      symbol: 'ETH',
-      decimals: 18,
-    },
-  },
-  polygon: {
-    id: 137,
-    name: 'Polygon',
-    viemChain: polygon,
-    rpcUrl: 'https://polygon.llamarpc.com',
-    nativeCurrency: {
-      name: 'MATIC',
-      symbol: 'MATIC',
-      decimals: 18,
-    },
-  },
-  arbitrum: {
-    id: 42161,
-    name: 'Arbitrum One',
-    viemChain: arbitrum,
-    rpcUrl: 'https://arbitrum.llamarpc.com',
-    nativeCurrency: {
-      name: 'Ether',
-      symbol: 'ETH',
-      decimals: 18,
-    },
-  },
-  optimism: {
-    id: 10,
-    name: 'Optimism',
-    viemChain: optimism,
-    rpcUrl: 'https://optimism.llamarpc.com',
-    nativeCurrency: {
-      name: 'Ether',
-      symbol: 'ETH',
-      decimals: 18,
-    },
-  },
-  base: {
-    id: 8453,
-    name: 'Base',
-    viemChain: base,
-    rpcUrl: 'https://base.llamarpc.com',
-    nativeCurrency: {
-      name: 'Ether',
-      symbol: 'ETH',
-      decimals: 18,
-    },
-  },
-  bsc: {
-    id: 56,
-    name: 'BNB Smart Chain',
-    viemChain: bsc,
-    rpcUrl: 'https://bsc.llamarpc.com',
-    nativeCurrency: {
-      name: 'BNB',
-      symbol: 'BNB',
-      decimals: 18,
-    },
-  },
-};
+// Supported testnet chains - using viem's built-in chain definitions
+export const SUPPORTED_CHAINS: Array<Chain> = [
+  chains.sepolia,
+  chains.baseSepolia,
+  chains.monadTestnet,
+  chains.optimismSepolia,
+  chains.arbitrumSepolia,
+  chains.zksyncSepoliaTestnet,
+  chains.lineaSepolia,
+  chains.scrollSepolia,
+  chains.polygonMumbai,
+  chains.bscTestnet,
+];
 
 // Cache for public clients
 const clientCache = new Map<string, PublicClient>();
@@ -91,7 +22,7 @@ const clientCache = new Map<string, PublicClient>();
  * Get a public client for a specific chain
  */
 export function getPublicClient(chainName: string): PublicClient {
-  const chain = SUPPORTED_CHAINS[chainName];
+  const chain = SUPPORTED_CHAINS.find(chain => chain.name === chainName);
   if (!chain) {
     throw new Error(`Unsupported chain: ${chainName}`);
   }
@@ -101,10 +32,10 @@ export function getPublicClient(chainName: string): PublicClient {
     return clientCache.get(chainName)!;
   }
 
-  // Create new client
+  // Create new client using viem's chain definition
   const client = createPublicClient({
-    chain: chain.viemChain,
-    transport: http(chain.rpcUrl),
+    chain,
+    transport: http(),
   });
 
   // Cache the client
@@ -116,8 +47,8 @@ export function getPublicClient(chainName: string): PublicClient {
 /**
  * Get chain configuration by name
  */
-export function getChainConfig(chainName: string): ChainConfig {
-  const chain = SUPPORTED_CHAINS[chainName];
+export function getChain(chainName: string): Chain {
+  const chain = SUPPORTED_CHAINS.find(chain => chain.name === chainName);
   if (!chain) {
     throw new Error(`Unsupported chain: ${chainName}`);
   }
@@ -127,10 +58,10 @@ export function getChainConfig(chainName: string): ChainConfig {
 /**
  * Get chain configuration by chain ID
  */
-export function getChainConfigById(chainId: number): ChainConfig | null {
-  for (const [name, config] of Object.entries(SUPPORTED_CHAINS)) {
-    if (config.id === chainId) {
-      return config;
+export function getChainById(chainId: number): Chain | null {
+  for (const [name, chain] of Object.entries(SUPPORTED_CHAINS)) {
+    if (chain.id === chainId) {
+      return chain;
     }
   }
   return null;
