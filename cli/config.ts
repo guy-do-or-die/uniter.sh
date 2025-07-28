@@ -44,7 +44,10 @@ export function loadConfig(): UniterConfig {
     ...fileConfig,
     // Environment variables take precedence
     ...(process.env.ONEINCH_API_KEY && { oneinchApiKey: process.env.ONEINCH_API_KEY }),
-    ...(process.env.WALLETCONNECT_PROJECT_ID && { walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID }),
+    // Support both old WALLETCONNECT_PROJECT_ID and new REOWN_PROJECT_ID
+    ...((process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID) && { 
+      walletConnectProjectId: process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID 
+    }),
     ...(process.env.DEFAULT_TARGET_TOKEN && { defaultTargetToken: process.env.DEFAULT_TARGET_TOKEN }),
     ...(process.env.DEFAULT_CHAIN && { defaultChain: process.env.DEFAULT_CHAIN }),
     ...(process.env.DEFAULT_MIN_USD_VALUE && { defaultMinUsdValue: parseFloat(process.env.DEFAULT_MIN_USD_VALUE) }),

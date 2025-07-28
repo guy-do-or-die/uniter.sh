@@ -8,7 +8,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx cli/cli.ts",
+    "dev": "bun run cli/cli.ts",
+    "start": "bun run cli/cli.ts",
+    "uniter": "bun run cli/cli.ts",
     "test": "vitest",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write ."
@@ -24,8 +26,11 @@
   "author": "guy-do-or-die",
   "license": "MIT",
   "dependencies": {
-    "@walletconnect/qrcode-modal": "^1.8.0",
-    "@walletconnect/sign-client": "^2.11.2",
+    "@reown/appkit": "^1.0.0",
+    "@reown/appkit-adapter-wagmi": "^1.0.0",
+    "@walletconnect/sign-client": "^2.21.5",
+    "@walletconnect/types": "^2.21.5",
+    "@walletconnect/utils": "^2.21.5",
     "axios": "^1.6.7",
     "chalk": "^5.4.1",
     "citty": "^0.1.6",
