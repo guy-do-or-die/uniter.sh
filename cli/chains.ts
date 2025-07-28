@@ -1,8 +1,16 @@
 import { createPublicClient, http, PublicClient, Chain } from 'viem';
 import * as chains from 'viem/chains';
 
-// Supported testnet chains - using viem's built-in chain definitions
+// Supported chains - including both mainnet and testnet chains
 export const SUPPORTED_CHAINS: Array<Chain> = [
+  // Mainnet chains
+  chains.mainnet,
+  chains.base,
+  chains.optimism,
+  chains.arbitrum,
+  chains.polygon,
+  chains.bsc,
+  // Testnet chains
   chains.sepolia,
   chains.baseSepolia,
   chains.monadTestnet,

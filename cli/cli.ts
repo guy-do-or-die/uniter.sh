@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import dotenv from 'dotenv';
 import { connectWallet, disconnectWallet, isWalletConnected, getCurrentSession } from './wallet.js';
 import { getSupportedChains } from './chains.js';
+import { scanTokens, displayTokens } from './tokens.js';
+import { loadConfig } from './config.js';
 
 // Load environment variables
 dotenv.config();
@@ -66,6 +68,32 @@ const main = defineCommand({
         } else {
           console.log(chalk.yellow('❌ No wallet connected'));
           console.log(chalk.gray('Use `uniter.sh connect` to connect your wallet'));
+        }
+      },
+    }),
+    
+    scan: defineCommand({
+      meta: {
+        description: '🔍 Scan wallet for token balances using 1inch API',
+      },
+      async run() {
+        if (!isWalletConnected()) {
+          console.log(chalk.yellow('⚠️ No wallet connected. Please connect your wallet first.'));
+          console.log(chalk.gray('Use `uniter.sh connect` to connect your wallet'));
+          return;
+        }
+        
+        try {
+          console.log(chalk.cyan('🔍 Starting token scan...'));
+          const scanResult = await scanTokens();
+          displayTokens(scanResult);
+          
+          if (scanResult.dustTokens.length > 0) {
+            console.log(chalk.yellow(`\n💡 Found ${scanResult.dustTokens.length} dust tokens worth $${scanResult.dustTokens.reduce((sum, t) => sum + t.balanceUSD, 0).toFixed(2)}`));
+            console.log(chalk.gray('Use `uniter.sh sweep` to unite them into a single token'));
+          }
+        } catch (error) {
+          console.error(chalk.red('❌ Token scan failed:'), error instanceof Error ? error.message : String(error));
         }
       },
     }),

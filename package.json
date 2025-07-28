@@ -8,10 +8,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "bun run cli/cli.ts",
+    "dev": "bun vitest run tests/*.test.ts && bun run cli/cli.ts",
     "start": "bun run cli/cli.ts",
     "uniter": "bun run cli/cli.ts",
     "test": "vitest",
+    "test:run": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write ."
   },

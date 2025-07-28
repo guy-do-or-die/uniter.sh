@@ -5,6 +5,9 @@ import { loadConfig } from './config.js';
 import { SUPPORTED_CHAINS } from './chains.js';
 import { createPublicClient, http } from 'viem';
 import { sepolia } from 'viem/chains';
+import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface WalletSession {
   address: string;
@@ -13,12 +16,159 @@ interface WalletSession {
   topic: string;
 }
 
+// Serializable session data for persistence
+interface SerializableSession {
+  address: string;
+  chainId: number;
+  topic: string;
+  projectId: string;
+  expiresAt: number; // Unix timestamp
+  createdAt: number; // Unix timestamp
+}
+
 let currentSession: WalletSession | null = null;
+const SESSION_FILE_PATH = join(homedir(), '.uniter-session.json');
+
+/**
+ * Save session to disk for persistence
+ */
+function saveSession(session: WalletSession, projectId: string): void {
+  try {
+    const now = Date.now();
+    const expiresAt = now + (7 * 24 * 60 * 60 * 1000); // 7 days from now
+    
+    const serializableSession: SerializableSession = {
+      address: session.address,
+      chainId: session.chainId,
+      topic: session.topic,
+      projectId,
+      expiresAt,
+      createdAt: now,
+    };
+    
+    // Write with secure permissions (owner read/write only)
+    writeFileSync(SESSION_FILE_PATH, JSON.stringify(serializableSession, null, 2), { mode: 0o600 });
+    console.log('💾 Session saved securely for future use (expires in 7 days)');
+  } catch (error) {
+    console.warn('⚠️ Failed to save session:', (error as Error).message);
+  }
+}
+
+/**
+ * Load session from disk
+ */
+function loadSavedSession(): SerializableSession | null {
+  try {
+    if (!existsSync(SESSION_FILE_PATH)) {
+      return null;
+    }
+    const sessionData = readFileSync(SESSION_FILE_PATH, 'utf-8');
+    const session = JSON.parse(sessionData) as SerializableSession;
+    
+    // Check if session has expired
+    if (session.expiresAt && Date.now() > session.expiresAt) {
+      console.log('⏰ Saved session has expired, clearing...');
+      clearSavedSession();
+      return null;
+    }
+    
+    // Validate required fields (backward compatibility)
+    if (!session.address || !session.chainId || !session.topic || !session.projectId) {
+      console.log('⚠️ Invalid session data structure, clearing...');
+      clearSavedSession();
+      return null;
+    }
+    
+    return session;
+  } catch (error) {
+    console.warn('⚠️ Failed to load saved session:', (error as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Clear saved session from disk
+ */
+function clearSavedSession(): void {
+  try {
+    if (existsSync(SESSION_FILE_PATH)) {
+      unlinkSync(SESSION_FILE_PATH);
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to clear saved session:', (error as Error).message);
+  }
+}
+
+/**
+ * Try to restore existing session from disk
+ */
+export async function restoreSession(): Promise<{ address: string; chainId: number } | null> {
+  const savedSession = loadSavedSession();
+  if (!savedSession) {
+    return null;
+  }
+
+  const config = loadConfig();
+  if (!config.walletConnectProjectId || config.walletConnectProjectId !== savedSession.projectId) {
+    console.log('⚠️ Saved session project ID mismatch, clearing...');
+    clearSavedSession();
+    return null;
+  }
+
+  try {
+    console.log('🔄 Restoring saved session...');
+    
+    // Initialize WalletConnect client
+    const client = await SignClient.init({
+      projectId: config.walletConnectProjectId,
+      metadata: {
+        name: 'uniter.sh',
+        description: 'Unite all your onchain dust and scattered assets into a single token',
+        url: 'https://github.com/guy-do-or-die/uniter.sh',
+        icons: ['https://avatars.githubusercontent.com/u/37784886'],
+      },
+    });
+
+    // Check if the session still exists and is valid
+    const sessions = client.session.getAll();
+    const existingSession = sessions.find(s => s.topic === savedSession.topic);
+    
+    if (!existingSession) {
+      console.log('⚠️ Saved session no longer valid, clearing...');
+      clearSavedSession();
+      return null;
+    }
+
+    // Restore session
+    currentSession = {
+      address: savedSession.address,
+      chainId: savedSession.chainId,
+      client,
+      topic: savedSession.topic,
+    };
+
+    console.log('✅ Session restored successfully!');
+    console.log('📍 Address:', savedSession.address);
+    console.log('⛓️ Chain ID:', savedSession.chainId);
+    
+    return { address: savedSession.address, chainId: savedSession.chainId };
+  } catch (error) {
+    console.warn('⚠️ Failed to restore session:', (error as Error).message);
+    clearSavedSession();
+    return null;
+  }
+}
 
 /**
  * Connect wallet via WalletConnect v2 (CLI-friendly approach)
  */
 export async function connectWallet(): Promise<{ address: string; chainId: number }> {
+  // First try to restore existing session
+  const restored = await restoreSession();
+  if (restored) {
+    return restored;
+  }
+
   const config = loadConfig();
   
   if (!config.walletConnectProjectId) {
@@ -156,6 +306,9 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
           topic: session.topic,
         };
 
+        // Save session to disk for persistence
+        saveSession(currentSession, config.walletConnectProjectId!);
+
         clearTimeout(timeout);
         resolve({ address, chainId });
       } catch (error) {
@@ -282,11 +435,13 @@ export async function disconnectWallet(): Promise<void> {
     });
     
     currentSession = null;
+    clearSavedSession();
     console.log('✅ Wallet disconnected successfully');
   } catch (error) {
     console.error('❌ Error disconnecting wallet:', error);
     // Clear session anyway
     currentSession = null;
+    clearSavedSession();
   }
 }
 
