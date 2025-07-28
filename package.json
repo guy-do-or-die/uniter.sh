@@ -1,0 +1,52 @@
+{
+  "name": "uniter.sh",
+  "version": "1.0.0",
+  "description": "Unite all your onchain dust and scattered assets into a single token in one smart command",
+  "main": "dist/cli/cli.js",
+  "bin": {
+    "uniter.sh": "./dist/cli/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx cli/cli.ts",
+    "test": "vitest",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "defi",
+    "1inch",
+    "token-swap",
+    "cli",
+    "ethereum",
+    "multichain"
+  ],
+  "author": "guy-do-or-die",
+  "license": "MIT",
+  "dependencies": {
+    "@walletconnect/qrcode-modal": "^1.8.0",
+    "@walletconnect/sign-client": "^2.11.2",
+    "axios": "^1.6.7",
+    "chalk": "^5.4.1",
+    "citty": "^0.1.6",
+    "dotenv": "^17.2.1",
+    "ora": "^8.0.1",
+    "qrcode-terminal": "^0.12.0",
+    "viem": "^2.7.15",
+    "zx": "^7.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "@types/qrcode-terminal": "^0.12.2",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.1",
+    "vitest": "^1.2.2",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "prettier": "^3.2.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
