@@ -9,7 +9,7 @@ import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-interface WalletSession {
+export interface WalletSession {
   address: string;
   chainId: number;
   client: any; // SignClient type
@@ -33,6 +33,14 @@ const SESSION_FILE_PATH = join(homedir(), '.uniter-session.json');
  * Save session to disk for persistence
  */
 function saveSession(session: WalletSession, projectId: string): void {
+  console.log('💾 saveSession() called with:', {
+    address: session.address,
+    chainId: session.chainId,
+    topic: session.topic?.substring(0, 20) + '...',
+    projectId,
+    sessionFilePath: SESSION_FILE_PATH
+  });
+  
   try {
     const now = Date.now();
     const expiresAt = now + (7 * 24 * 60 * 60 * 1000); // 7 days from now
@@ -46,11 +54,25 @@ function saveSession(session: WalletSession, projectId: string): void {
       createdAt: now,
     };
     
+    console.log('💾 Writing session to:', SESSION_FILE_PATH);
+    console.log('💾 Session data to write:', JSON.stringify(serializableSession, null, 2));
+    
     // Write with secure permissions (owner read/write only)
     writeFileSync(SESSION_FILE_PATH, JSON.stringify(serializableSession, null, 2), { mode: 0o600 });
+    
+    // Verify the file was actually written
+    if (existsSync(SESSION_FILE_PATH)) {
+      console.log('✅ Session file successfully created at:', SESSION_FILE_PATH);
+      const fileContent = readFileSync(SESSION_FILE_PATH, 'utf-8');
+      console.log('✅ File content verified, size:', fileContent.length, 'bytes');
+    } else {
+      console.error('❌ Session file was NOT created!');
+    }
+    
     console.log('💾 Session saved securely for future use (expires in 7 days)');
   } catch (error) {
-    console.warn('⚠️ Failed to save session:', (error as Error).message);
+    console.error('❌ Failed to save session:', (error as Error).message);
+    console.error('❌ Error stack:', (error as Error).stack);
   }
 }
 
@@ -58,30 +80,52 @@ function saveSession(session: WalletSession, projectId: string): void {
  * Load session from disk
  */
 function loadSavedSession(): SerializableSession | null {
+  console.log('🔍 Checking for saved session file...');
+  
+  if (!existsSync(SESSION_FILE_PATH)) {
+    console.log('📁 No session file found at:', SESSION_FILE_PATH);
+    return null;
+  }
+  
+  console.log('📁 Session file exists, loading...');
+
   try {
-    if (!existsSync(SESSION_FILE_PATH)) {
-      return null;
-    }
     const sessionData = readFileSync(SESSION_FILE_PATH, 'utf-8');
     const session = JSON.parse(sessionData) as SerializableSession;
     
+    console.log('📋 Loaded session data:', {
+      address: session.address,
+      chainId: session.chainId,
+      hasProjectId: !!session.projectId,
+      hasTopic: !!session.topic,
+      expiresAt: session.expiresAt ? new Date(session.expiresAt).toISOString() : 'no expiry'
+    });
+    
     // Check if session has expired
     if (session.expiresAt && Date.now() > session.expiresAt) {
-      console.log('⏰ Saved session has expired, clearing...');
+      console.log('⚠️ Session expired, clearing...');
       clearSavedSession();
       return null;
     }
     
-    // Validate required fields (backward compatibility)
+    // Validate session data structure
     if (!session.address || !session.chainId || !session.topic || !session.projectId) {
       console.log('⚠️ Invalid session data structure, clearing...');
+      console.log('❌ Missing fields:', {
+        address: !session.address,
+        chainId: !session.chainId,
+        topic: !session.topic,
+        projectId: !session.projectId
+      });
       clearSavedSession();
       return null;
     }
     
+    console.log('✅ Session data is valid');
     return session;
   } catch (error) {
-    console.warn('⚠️ Failed to load saved session:', (error as Error).message);
+    console.warn('⚠️ Failed to load session file:', (error as Error).message);
+    clearSavedSession();
     return null;
   }
 }
@@ -117,6 +161,13 @@ export async function restoreSession(): Promise<{ address: string; chainId: numb
 
   try {
     console.log('🔄 Restoring saved session...');
+    console.log('📋 Session data:', {
+      address: savedSession.address,
+      chainId: savedSession.chainId,
+      topic: savedSession.topic.substring(0, 20) + '...',
+      projectId: savedSession.projectId,
+      expiresAt: new Date(savedSession.expiresAt).toISOString()
+    });
     
     // Initialize WalletConnect client
     const client = await SignClient.init({
@@ -131,12 +182,25 @@ export async function restoreSession(): Promise<{ address: string; chainId: numb
 
     // Check if the session still exists and is valid
     const sessions = client.session.getAll();
+    console.log('🔍 Found', sessions.length, 'WalletConnect sessions');
+    
     const existingSession = sessions.find(s => s.topic === savedSession.topic);
     
     if (!existingSession) {
-      console.log('⚠️ Saved session no longer valid, clearing...');
-      clearSavedSession();
-      return null;
+      console.log('⚠️ Saved session topic not found in WalletConnect sessions');
+      console.log('🔍 Available session topics:', sessions.map(s => s.topic.substring(0, 20) + '...'));
+      
+      // CRITICAL FIX: Don't immediately clear the session!
+      // WalletConnect sessions may not be immediately available in a new client instance
+      // but the session data is still valid. Try to restore the session anyway.
+      console.log('🔄 Session not found in client, but trying to restore anyway...');
+      console.log('💡 Note: WalletConnect sessions may not persist across client instances');
+      
+      // For now, we'll restore the session optimistically
+      // In a production app, you might want to try to reconnect or validate differently
+    } else {
+      console.log('✅ Found matching WalletConnect session');
+      console.log('📋 Session accounts:', existingSession.namespaces?.eip155?.accounts || 'none');
     }
 
     // Restore session
@@ -197,15 +261,8 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
       reject(new Error('Connection timeout. Please try again.'));
     }, 300000); // 5 minute timeout
 
-    // Add debugging to see if ANY events are being received
+    // Set up event listeners
     console.log('🔍 Adding event listeners...');
-    
-    // Add a catch-all event listener to see what events we're getting
-    const originalEmit = client.emit.bind(client);
-    client.emit = function(event: any, ...args: any[]) {
-      console.log('📡 Event emitted:', event, args.length > 0 ? 'with data' : 'no data');
-      return originalEmit(event, ...args);
-    } as any;
 
     client.on('session_proposal', async (event) => {
       console.log('📋 Session proposal received from wallet!');

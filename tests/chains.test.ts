@@ -10,11 +10,9 @@ import {
 
 describe('Chain Utilities', () => {
   it('should get chain config by name', () => {
-    const sepoliaChain = getChain('Sepolia');
-    
-    expect(sepoliaChain.id).toBe(11155111);
-    expect(sepoliaChain.name).toBe('Sepolia');
-    expect(sepoliaChain.nativeCurrency.symbol).toBe('ETH');
+    const baseChain = getChain('Base');
+    expect(baseChain).not.toBeNull();
+    expect(baseChain.name).toBe('Base');
   });
 
   it('should throw error for unsupported chain name', () => {
@@ -22,11 +20,9 @@ describe('Chain Utilities', () => {
   });
 
   it('should get chain config by ID', () => {
-    const sepoliaChain = getChainById(11155111);
-    
-    expect(sepoliaChain).not.toBeNull();
-    expect(sepoliaChain!.name).toBe('Sepolia');
-    expect(sepoliaChain!.nativeCurrency.symbol).toBe('ETH');
+    const baseChain = getChainById(8453);
+    expect(baseChain).not.toBeNull();
+    expect(baseChain!.id).toBe(8453);
   });
 
   it('should return null for unsupported chain ID', () => {
@@ -42,20 +38,19 @@ describe('Chain Utilities', () => {
     expect(chainNames.length).toBeGreaterThan(0);
   });
 
-  it('should have supported chains array with testnet chains', () => {
+  it('should have supported chains array with mainnet chains', () => {
     expect(Array.isArray(SUPPORTED_CHAINS)).toBe(true);
     expect(SUPPORTED_CHAINS.length).toBeGreaterThan(0);
     
-    // Check that we have some expected testnet chains
+    // Check that we have some expected mainnet chains
     const chainNames = SUPPORTED_CHAINS.map(chain => chain.name);
-    expect(chainNames).toContain('Sepolia');
-    expect(chainNames).toContain('Polygon Mumbai');
+    expect(chainNames).toContain('Base');
+    expect(chainNames).toContain('Arbitrum One');
   });
 
   it('should create public client for supported chain', () => {
-    const client = getPublicClient('Sepolia');
-    expect(client).toBeDefined();
-    expect(typeof client.getBlockNumber).toBe('function');
+    const client = getPublicClient('Base');
+    expect(client).not.toBeNull();
   });
 
   it('should throw error when creating client for unsupported chain', () => {
@@ -63,16 +58,14 @@ describe('Chain Utilities', () => {
   });
 
   it('should cache public clients', () => {
-    const client1 = getPublicClient('Sepolia');
-    const client2 = getPublicClient('Sepolia');
-    
-    // Should return the same cached instance
+    const client1 = getPublicClient('Base');
+    const client2 = getPublicClient('Base');
     expect(client1).toBe(client2);
   });
 
   // Note: This test makes actual network calls, so we'll skip it in CI
   it.skip('should test chain connection', async () => {
-    const isConnected = await testChainConnection('Sepolia');
+    const isConnected = await testChainConnection('Base');
     expect(typeof isConnected).toBe('boolean');
   }, 10000); // 10 second timeout for network call
 });

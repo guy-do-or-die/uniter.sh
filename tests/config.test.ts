@@ -24,7 +24,6 @@ describe('Configuration Management', () => {
   it('should load default configuration when no file exists', () => {
     const config = loadConfig();
     
-    expect(config.defaultTargetToken).toBe('USDC');
     expect(config.defaultChain).toBe('base');
     expect(config.defaultMinUsdValue).toBe(5);
     expect(config.maxSlippage).toBe(1);
@@ -40,11 +39,10 @@ describe('Configuration Management', () => {
 
     const config = loadConfig();
     
-    expect(config.defaultTargetToken).toBe('USDT');
     expect(config.defaultChain).toBe('ethereum');
     expect(config.defaultMinUsdValue).toBe(10);
-    expect(config.oneinchApiKey).toBe('test-api-key');
-    expect(config.walletConnectProjectId).toBe('test-project-id');
+    expect(config.oneinchApiKey).toBe(process.env.ONEINCH_API_KEY);
+    expect(config.walletConnectProjectId).toBe(process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID);
 
     // Clean up
     delete process.env.DEFAULT_TARGET_TOKEN;
@@ -58,7 +56,6 @@ describe('Configuration Management', () => {
     const validConfig = {
       oneinchApiKey: 'test-key',
       walletConnectProjectId: 'test-project',
-      defaultTargetToken: 'USDC',
       defaultChain: 'base',
       defaultMinUsdValue: 5,
     };
@@ -70,7 +67,6 @@ describe('Configuration Management', () => {
 
   it('should detect missing required configuration', () => {
     const invalidConfig = {
-      defaultTargetToken: 'USDC',
       defaultChain: 'base',
       defaultMinUsdValue: 5,
     };

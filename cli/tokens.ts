@@ -1,48 +1,53 @@
-import { getCurrentSession } from './wallet.js';
+/**
+ * Token scanning and management functionality
+ * Integrates with 1inch API to fetch wallet token balances and metadata
+ * Refactored for SOLID principles and maintainability
+ */
+
 import { loadConfig } from './config.js';
 import { SUPPORTED_CHAINS } from './chains.js';
+import type { WalletSession } from './wallet.js';
+import { getWalletBalances, getTokenMetadata } from './oneinch-api.js';
+import { processTokenBalances, filterTokens, categorizeTokens, calculatePortfolioStats, logZeroBalanceTokens } from './token-processor.js';
+import { displayTokens as displayTokenResults } from './token-display.js';
 
+// Token balance interface
 export interface TokenBalance {
   address: string;
   symbol: string;
   name: string;
   decimals: number;
-  balance: string;
-  balanceUSD: number;
-  chainId: number;
-  chainName: string;
-  logoURI?: string;
+  balance: string; // Raw balance from API
+  balanceFormatted: string; // Human-readable balance
+  balanceNum: number; // Numeric balance for calculations
+  balanceUSD: number; // USD value
 }
 
+// Token scan result interface
 export interface TokenScanResult {
-  totalUSD: number;
-  totalTokens: number;
-  tokens: TokenBalance[];
+  allTokens: TokenBalance[];
   dustTokens: TokenBalance[];
+  mediumTokens: TokenBalance[];
+  significantTokens: TokenBalance[];
+  totalUSD: number;
+  chainId: number;
+  chainName: string;
 }
 
 /**
- * Get token balances for connected wallet using 1inch API
+ * Main token scanning function
+ * @param session - WalletConnect session
+ * @param dustThresholdUsd - Maximum USD value for dust tokens (default: $5)
  */
-export async function scanTokens(sessionOverride?: { address: string; chainId: number }): Promise<TokenScanResult> {
-  const session = sessionOverride || getCurrentSession();
-  if (!session) {
-    throw new Error('No wallet connected. Please connect your wallet first.');
-  }
-
+export async function scanTokens(
+  session: WalletSession, 
+  dustThresholdUsd: number = 5
+): Promise<TokenScanResult> {
   const config = loadConfig();
   if (!config.oneinchApiKey) {
-    throw new Error('1inch API key is required. Please set ONEINCH_API_KEY in your environment variables.');
+    throw new Error('1inch API key not configured');
   }
 
-  console.log('🔍 Scanning tokens for wallet:', session.address);
-  console.log('⛓️ Chain ID:', session.chainId);
-
-  const allTokens: TokenBalance[] = [];
-  let totalUSD = 0;
-
-  // For now, scan the current chain only
-  // TODO: Extend to scan multiple chains
   const chainInfo = SUPPORTED_CHAINS.find(c => c.id === session.chainId);
   if (!chainInfo) {
     throw new Error(`Unsupported chain ID: ${session.chainId}`);
@@ -51,160 +56,144 @@ export async function scanTokens(sessionOverride?: { address: string; chainId: n
   try {
     console.log(`🔄 Scanning ${chainInfo.name} for token balances...`);
     
-    // Use 1inch API to get token balances
-    const response = await fetch(
-      `https://api.1inch.dev/balance/v1.2/${session.chainId}/balances/${session.address}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${config.oneinchApiKey}`,
-          'Accept': 'application/json',
-        },
-      }
+    // Fetch data from 1inch API
+    const [balanceData, tokenMetadata] = await Promise.all([
+      getWalletBalances(session.chainId, session.address),
+      getTokenMetadata(session.chainId)
+    ]);
+    
+    console.log('📊 Raw balance data:', Object.keys(balanceData).length, 'tokens found');
+    console.log('📊 Token metadata:', Object.keys(tokenMetadata).length, 'tokens available');
+
+    // Process tokens and calculate USD values
+    const processedTokens = await processTokenBalances(
+      balanceData,
+      tokenMetadata,
+      session.chainId
     );
 
-    if (!response.ok) {
-      throw new Error(`1inch API error: ${response.status} ${response.statusText}`);
-    }
+    // Apply filtering based on configuration
+    // Use a low threshold for filtering (0.01) to include all valuable tokens
+    // Higher thresholds are used only for categorization, not filtering
+    const filteredTokens = filterTokens(processedTokens, {
+      minUSDValue: 0.01, // Low threshold to include tokens like KAITO ($2.33) and CLANKER ($1.99)
+      maxTokensToProcess: config.maxTokensToProcess || 100,
+      excludeZeroBalances: true,
+    });
 
-    const data = await response.json();
-    console.log('📊 Raw balance data:', Object.keys(data).length, 'tokens found');
+    // Categorize tokens
+    const mediumThreshold = config.defaultMinUsdValue || dustThresholdUsd;
+    const { dustTokens, mediumTokens, significantTokens } = categorizeTokens(
+      filteredTokens,
+      dustThresholdUsd,
+      mediumThreshold
+    );
 
-    // Process token balances
-    for (const [tokenAddress, balanceData] of Object.entries(data)) {
-      const balance = balanceData as any;
-      
-      if (!balance.symbol || !balance.decimals) {
-        continue; // Skip invalid tokens
-      }
+    // Calculate portfolio statistics
+    const { totalUSD } = calculatePortfolioStats(filteredTokens);
 
-      const tokenBalance: TokenBalance = {
-        address: tokenAddress,
-        symbol: balance.symbol,
-        name: balance.name || balance.symbol,
-        decimals: balance.decimals,
-        balance: balance.balance,
-        balanceUSD: parseFloat(balance.balanceUSD || '0'),
-        chainId: session.chainId,
-        chainName: chainInfo.name,
-        logoURI: balance.logoURI,
-      };
-
-      allTokens.push(tokenBalance);
-      totalUSD += tokenBalance.balanceUSD;
-    }
-
-    // Sort tokens by USD value (descending)
-    allTokens.sort((a, b) => b.balanceUSD - a.balanceUSD);
-
-    // Identify dust tokens (less than minimum USD value)
-    const minUSDValue = config.defaultMinUsdValue || 5;
-    const dustTokens = allTokens.filter(token => token.balanceUSD < minUSDValue && token.balanceUSD > 0);
-    const significantTokens = allTokens.filter(token => token.balanceUSD >= minUSDValue);
-
+    // Display results
     console.log('✅ Token scan complete!');
     console.log(`💰 Total portfolio value: $${totalUSD.toFixed(2)}`);
-    console.log(`🪙 Total tokens found: ${allTokens.length}`);
-    console.log(`🧹 Dust tokens (< $${minUSDValue}): ${dustTokens.length}`);
-    console.log(`💎 Significant tokens (>= $${minUSDValue}): ${significantTokens.length}`);
+    console.log(`🪙 Total tokens processed: ${filteredTokens.length}`);
+    console.log(`🧹 Dust tokens (< $${dustThresholdUsd}): ${dustTokens.length}`);
+    
+    if (mediumTokens.length > 0) {
+      console.log(`🔸 Medium tokens ($${dustThresholdUsd}-$${mediumThreshold}): ${mediumTokens.length}`);
+    }
+    
+    console.log(`💎 Significant tokens (>= $${mediumThreshold}): ${significantTokens.length}`);
+    console.log(`🔍 Filtered: ${processedTokens.length - filteredTokens.length} tokens excluded by advanced filters`);
+
+    // Debug: Show sample zero balance tokens
+    logZeroBalanceTokens(balanceData, tokenMetadata, 5);
 
     return {
-      totalUSD,
-      totalTokens: allTokens.length,
-      tokens: allTokens,
+      allTokens: filteredTokens,
       dustTokens,
+      mediumTokens,
+      significantTokens,
+      totalUSD,
+      chainId: session.chainId,
+      chainName: chainInfo.name,
     };
 
   } catch (error) {
-    console.error('❌ Error scanning tokens:', error);
+    console.error('❌ Error scanning tokens:', (error as Error).message);
     throw error;
   }
 }
 
 /**
- * Display token balances in a user-friendly format
+ * Display tokens in a user-friendly format
+ * @deprecated Use displayTokens from token-display.ts instead
  */
-export function displayTokens(scanResult: TokenScanResult): void {
-  const { totalUSD, totalTokens, tokens, dustTokens } = scanResult;
-
-  console.log('\n' + '='.repeat(60));
-  console.log('🪙 TOKEN PORTFOLIO SUMMARY');
-  console.log('='.repeat(60));
-  console.log(`💰 Total Value: $${totalUSD.toFixed(2)}`);
-  console.log(`🔢 Total Tokens: ${totalTokens}`);
-  console.log(`🧹 Dust Tokens: ${dustTokens.length}`);
-  console.log('='.repeat(60));
-
-  if (tokens.length === 0) {
-    console.log('📭 No tokens found in this wallet');
-    return;
-  }
-
-  // Display significant tokens
-  const significantTokens = tokens.filter(t => !dustTokens.includes(t));
-  if (significantTokens.length > 0) {
-    console.log('\n💎 SIGNIFICANT TOKENS:');
-    significantTokens.forEach((token, index) => {
-      const emoji = getTokenEmoji(token.symbol);
-      const balanceFormatted = formatTokenBalance(token.balance, token.decimals);
-      console.log(`${index + 1}. ${emoji} ${token.symbol} - ${balanceFormatted} ($${token.balanceUSD.toFixed(2)})`);
-    });
-  }
-
-  // Display dust tokens
-  if (dustTokens.length > 0) {
-    console.log('\n🧹 DUST TOKENS (potential for cleanup):');
-    dustTokens.forEach((token, index) => {
-      const emoji = getTokenEmoji(token.symbol);
-      const balanceFormatted = formatTokenBalance(token.balance, token.decimals);
-      console.log(`${index + 1}. ${emoji} ${token.symbol} - ${balanceFormatted} ($${token.balanceUSD.toFixed(2)})`);
-    });
-  }
-
-  console.log('='.repeat(60));
+export function displayTokens(result: TokenScanResult): void {
+  return displayTokenResults(result);
 }
 
 /**
- * Get emoji for token symbol
+ * Scan tokens across all supported chains with clean resume output
  */
-function getTokenEmoji(symbol: string): string {
-  const emojiMap: Record<string, string> = {
-    'ETH': '💎',
-    'WETH': '💎',
-    'BTC': '₿',
-    'WBTC': '₿',
-    'USDC': '💵',
-    'USDT': '💵',
-    'DAI': '💵',
-    'MATIC': '🟣',
-    'LINK': '🔗',
-    'UNI': '🦄',
-    'AAVE': '👻',
-    'COMP': '🏛️',
-    'MKR': '🏗️',
-    'SNX': '⚡',
-    'YFI': '🔥',
-    'SUSHI': '🍣',
-    'CRV': '📈',
-    'BAL': '⚖️',
-    'LDO': '🌊',
-  };
-
-  return emojiMap[symbol.toUpperCase()] || '🪙';
-}
-
-/**
- * Format token balance for display
- */
-function formatTokenBalance(balance: string, decimals: number): string {
-  const balanceNum = parseFloat(balance) / Math.pow(10, decimals);
+export async function scanTokensMultiChain(session: WalletSession): Promise<void> {
+  const { generateMultichainSummary, displayMultichainResume, displayTopDustTokens } = await import('./resume.js');
   
-  if (balanceNum >= 1000000) {
-    return (balanceNum / 1000000).toFixed(2) + 'M';
-  } else if (balanceNum >= 1000) {
-    return (balanceNum / 1000).toFixed(2) + 'K';
-  } else if (balanceNum >= 1) {
-    return balanceNum.toFixed(4);
+  console.log('🌐 Starting multi-chain token scan...');
+  
+  // All SUPPORTED_CHAINS are compatible with 1inch API
+  const compatibleChains = SUPPORTED_CHAINS.map(chain => ({
+    name: chain.name,
+    id: chain.id
+  }));
+  
+  console.log(`📡 Scanning ${compatibleChains.length} compatible chains...`);
+  
+  const results: TokenScanResult[] = [];
+  const failedChains: string[] = [];
+  
+  for (const chain of compatibleChains) {
+    try {
+      console.log(`🔍 Scanning ${chain.name}...`);
+      
+      // Create a temporary session for this chain
+      const chainSession: WalletSession = {
+        ...session,
+        chainId: chain.id
+      };
+      
+      // Scan tokens quietly (suppress individual chain output)
+      const originalLog = console.log;
+      console.log = () => {}; // Temporarily suppress console.log
+      
+      try {
+        const result = await scanTokens(chainSession);
+        results.push(result);
+      } finally {
+        console.log = originalLog; // Restore console.log
+      }
+      
+      console.log(`✅ ${chain.name} complete`);
+      
+    } catch (error) {
+      console.warn(`⚠️ Failed to scan ${chain.name}: ${(error as Error).message}`);
+      failedChains.push(chain.name);
+    }
+  }
+  
+  // Generate and display the clean resume
+  if (results.length > 0) {
+    const summary = generateMultichainSummary(results);
+    displayMultichainResume(summary);
+    
+    // Show top dust tokens for detailed review
+    if (summary.totalDustTokens > 0) {
+      displayTopDustTokens(results, 10);
+    }
   } else {
-    return balanceNum.toFixed(6);
+    console.log('❌ No chains scanned successfully');
+  }
+  
+  if (failedChains.length > 0) {
+    console.log(`\n⚠️ Failed to scan: ${failedChains.join(', ')}`);
   }
 }

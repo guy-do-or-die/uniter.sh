@@ -2,22 +2,33 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-// Simple config interface for now
+// Enhanced config interface with advanced filtering options
 interface UniterConfig {
-  defaultTargetToken?: string;
   defaultChain?: string;
   defaultMinUsdValue?: number;
+  minUSDValue?: number; // Minimum USD value for token filtering
   maxSlippage?: number;
   oneinchApiKey?: string;
   walletConnectProjectId?: string;
+  // Advanced filtering options
+  minTokenBalance?: number; // Minimum token count to consider (e.g., ignore tokens with < 0.001 balance)
+  dustThresholdUsd?: number; // Alternative dust threshold
+  excludeTokens?: string[]; // Token addresses to exclude from scanning
+  includeZeroBalance?: boolean; // Whether to include zero balance tokens
+  maxTokensToProcess?: number; // Limit number of tokens to process
 }
 
 // Default configuration
 const DEFAULT_CONFIG = {
-  defaultTargetToken: 'USDC' as string,
   defaultChain: 'base' as string,
-  defaultMinUsdValue: 5 as number,
+  defaultMinUsdValue: 1 as number,
   maxSlippage: 1 as number,
+  // Advanced filtering defaults
+  minTokenBalance: 0.001 as number, // Ignore tokens with very small balances
+  dustThresholdUsd: 5 as number, // More aggressive dust threshold
+  excludeTokens: [] as string[], // No excluded tokens by default
+  includeZeroBalance: false as boolean, // Skip zero balance tokens
+  maxTokensToProcess: 100 as number, // Limit to top 100 tokens
 };
 
 const CONFIG_FILE = join(homedir(), '.uniterrc');
@@ -48,7 +59,6 @@ export function loadConfig(): UniterConfig {
     ...((process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID) && { 
       walletConnectProjectId: process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID 
     }),
-    ...(process.env.DEFAULT_TARGET_TOKEN && { defaultTargetToken: process.env.DEFAULT_TARGET_TOKEN }),
     ...(process.env.DEFAULT_CHAIN && { defaultChain: process.env.DEFAULT_CHAIN }),
     ...(process.env.DEFAULT_MIN_USD_VALUE && { defaultMinUsdValue: parseFloat(process.env.DEFAULT_MIN_USD_VALUE) }),
   };

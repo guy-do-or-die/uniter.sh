@@ -3,24 +3,17 @@ import * as chains from 'viem/chains';
 
 // Supported chains - including both mainnet and testnet chains
 export const SUPPORTED_CHAINS: Array<Chain> = [
-  // Mainnet chains
-  chains.mainnet,
-  chains.base,
-  chains.optimism,
   chains.arbitrum,
-  chains.polygon,
+  chains.avalanche,
+  chains.base,
   chains.bsc,
-  // Testnet chains
-  chains.sepolia,
-  chains.baseSepolia,
-  chains.monadTestnet,
-  chains.optimismSepolia,
-  chains.arbitrumSepolia,
-  chains.zksyncSepoliaTestnet,
-  chains.lineaSepolia,
-  chains.scrollSepolia,
-  chains.polygonMumbai,
-  chains.bscTestnet,
+  chains.gnosis,
+  chains.linea,
+  chains.mainnet,
+  chains.optimism,
+  chains.polygon,
+  chains.sonic,
+  chains.zksync,
 ];
 
 // Cache for public clients
