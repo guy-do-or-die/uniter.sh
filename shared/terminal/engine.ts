@@ -1,10 +1,19 @@
 import { getChainId, getChainName, getSupportedChains } from '../chains.js';
 import { generateTokenScanOutput } from './display.js';
+import chalk from 'chalk';
 
 import { logoData } from './logo.js';
 
 import type { TerminalOutput, TerminalCommand, EnvironmentAdapter, TerminalRenderer } from './types.js';
 import type { ScanProgress } from '../types.js';
+
+
+
+export const DELIMITER = {
+  type: 'info',
+  content:'-'.repeat(47)
+} as TerminalOutput;
+
 
 /**
  * Unified terminal engine that works in both CLI and web environments
@@ -13,6 +22,7 @@ export class UnifiedTerminalEngine {
   private commands: Map<string, TerminalCommand> = new Map();
   private adapter: EnvironmentAdapter;
   private renderer?: TerminalRenderer;
+  private progressColorIndex: number = 0;
 
   constructor(adapter: EnvironmentAdapter) {
     this.adapter = adapter;
@@ -66,6 +76,54 @@ export class UnifiedTerminalEngine {
         reset: ''
       };
     }
+  }
+
+  /**
+   * Get vivid rainbow color functions for progress messages
+   */
+  private getPastelRainbowColors(): Array<(text: string) => string> {
+    return [
+      chalk.magenta,         // Vivid magenta
+      chalk.red,             // Vivid red
+      chalk.hex('#FF6B35'),  // Orange-red
+      chalk.hex('#FF8C00'),  // Dark orange
+      chalk.yellow,          // Vivid yellow
+      chalk.hex('#9AFF9A'),  // Light green
+      chalk.green,           // Vivid green
+      chalk.hex('#00FF7F'),  // Spring green
+      chalk.cyan,            // Vivid cyan
+      chalk.hex('#00BFFF'),  // Deep sky blue
+      chalk.blue,            // Vivid blue
+      chalk.hex('#4169E1'),  // Royal blue
+      chalk.hex('#8A2BE2'),  // Blue violet
+      chalk.hex('#9932CC'),  // Dark orchid
+    ];
+  }
+
+  /**
+   * Get next pastel rainbow color function and advance the index
+   */
+  private getNextPastelColorFunction(): (text: string) => string {
+    const colorFunctions = this.getPastelRainbowColors();
+    const colorFunction = colorFunctions[this.progressColorIndex % colorFunctions.length];
+    this.progressColorIndex++;
+    return colorFunction;
+  }
+
+  /**
+   * Apply pastel rainbow color to a progress message
+   */
+  private colorizeProgressMessage(message: string): string {
+    // Enable colors for both CLI and web environments
+    // xterm.js supports ANSI colors very well
+    
+    // Force chalk to always use colors
+    chalk.level = 3; // Force truecolor support
+    
+    const colorFunction = this.getNextPastelColorFunction();
+    const coloredMessage = colorFunction(message);
+    
+    return coloredMessage;
   }
 
   /**
@@ -230,11 +288,9 @@ export class UnifiedTerminalEngine {
   getStartupBanner(): TerminalOutput[] {
     const env = this.adapter.getEnvironment();
     const envInfo = env.isBrowser ? 'Web Terminal' : 'CLI Terminal';
-    const capabilities = env.canConnectWallet ? 'Full Functionality' : 'Demo Mode';
     
     const outputs: TerminalOutput[] = [];
     
-    // Add colored ASCII art logo right before CLI Terminal message
     if (logoData) {
       outputs.push({
         type: 'banner',
@@ -243,14 +299,16 @@ export class UnifiedTerminalEngine {
     }
     
     outputs.push(
+      DELIMITER,
       {
         type: 'info',
-        content: `${envInfo} - ${capabilities}`
+        content: `\x1b[1m\x1b[96m Uniter.sh ${envInfo} — Make tokens unitETH!\x1b[0m`
       },
       {
         type: 'info',
-        content: 'Type "help" to see available commands'
-      }
+        content: `\n   Type "help" to see available commands`
+      },
+      DELIMITER
     );
     
     return outputs;
@@ -401,7 +459,7 @@ export class UnifiedTerminalEngine {
     } else {
       return [{
         type: 'warning',
-        content: 'No wallet connected'
+        content: '\nNo wallet connected'
       }, {
         type: 'warning',
         content: 'Use "connect" to connect your wallet'
@@ -453,10 +511,12 @@ export class UnifiedTerminalEngine {
           if (progress.phase !== 'pricing') {
             // Major phases: display immediately as permanent output, then clear progress
             this.renderer.clearProgress();
-            this.renderer.writeln(progress.message);
+            const colorizedMessage = this.colorizeProgressMessage(progress.message);
+            this.renderer.writeln(colorizedMessage);
           } else {
             // Individual token pricing: show as in-place updates only
-            this.renderer.updateProgress(progress.message);
+            const colorizedMessage = this.colorizeProgressMessage(progress.message);
+            this.renderer.updateProgress(colorizedMessage);
           }
         }
       };
@@ -522,10 +582,12 @@ export class UnifiedTerminalEngine {
           if (progress.phase !== 'pricing') {
             // Major phases: display immediately as permanent output, then clear progress
             this.renderer.clearProgress();
-            this.renderer.writeln(progress.message);
+            const colorizedMessage = this.colorizeProgressMessage(progress.message);
+            this.renderer.writeln(colorizedMessage);
           } else {
             // Individual token pricing: show as in-place updates only
-            this.renderer.updateProgress(progress.message);
+            const colorizedMessage = this.colorizeProgressMessage(progress.message);
+            this.renderer.updateProgress(colorizedMessage);
           }
         }
       };

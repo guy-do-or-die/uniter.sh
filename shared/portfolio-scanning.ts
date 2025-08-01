@@ -54,7 +54,7 @@ export async function scanTokens(
       phase: 'fetching_balances',
       chainName: chainInfo.name,
       chainId: session.chainId,
-      message: `Fetching wallet balances from ${chainInfo.name}`
+      message: `Fetching wallet balances`
     });
     
     const balanceData = await api.getWalletBalances(session.chainId, session.address, config.oneinchApiKey);
@@ -66,7 +66,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       tokenCount,
-      message: `Found ${tokenCount} tokens with balances on ${chainInfo.name}`
+      message: `Found ${tokenCount} tokens with balances`
     });
     
     // Report fetching metadata phase
@@ -74,7 +74,7 @@ export async function scanTokens(
       phase: 'fetching_metadata',
       chainName: chainInfo.name,
       chainId: session.chainId,
-      message: `Fetching token metadata from ${chainInfo.name}`
+      message: `Fetching token metadata`
     });
     
     const tokenMetadata = await api.getTokenMetadata(session.chainId, config.oneinchApiKey);
@@ -86,7 +86,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       metadataCount,
-      message: `Loaded metadata for ${metadataCount} tokens on ${chainInfo.name}`
+      message: `Loaded metadata for ${metadataCount} tokens`
     });
     
     console.log('📊 Raw balance data:', tokenCount, 'tokens found');
@@ -98,7 +98,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       totalTokens: tokenCount,
-      message: `Processing ${tokenCount} tokens on ${chainInfo.name}`
+      message: `Processing ${tokenCount} tokens`
     });
 
     // Process tokens and calculate USD values
@@ -117,7 +117,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       totalTokens: processedTokens.length,
-      message: `Filtering ${processedTokens.length} processed tokens on ${chainInfo.name}`
+      message: `Filtering ${processedTokens.length} processed tokens`
     });
 
     // Apply filtering based on configuration
@@ -135,7 +135,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       totalTokens: filteredTokens.length,
-      message: `Filtered to ${filteredTokens.length} valuable tokens on ${chainInfo.name}`
+      message: `Filtered to ${filteredTokens.length} valuable tokens`
     });
 
     // Categorize tokens by USD value
@@ -154,7 +154,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       totalTokens: filteredTokens.length,
-      message: `Scan complete on ${chainInfo.name}: $${totalUSD.toFixed(2)} across ${filteredTokens.length} tokens (${significantTokens.length} significant, ${mediumTokens.length} medium, ${dustTokens.length} dust)`
+      message: `Scan complete: $${totalUSD.toFixed(2)} across ${filteredTokens.length} tokens (${significantTokens.length} significant, ${mediumTokens.length} medium, ${dustTokens.length} dust)`
     });
 
     // Return scan results

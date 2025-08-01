@@ -4,7 +4,7 @@ import { unifiedScan, scanMultichain } from '../shared/portfolio-display.js';
 import { loadConfig } from './config.js';
 
 /**
- * CLI environment adapter - provides full functionality
+ * CLI environment adapter
  */
 export class CliAdapter implements EnvironmentAdapter {
   

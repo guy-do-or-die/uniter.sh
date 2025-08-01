@@ -2,8 +2,6 @@ import '@xterm/xterm/css/xterm.css';
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { CanvasAddon } from '@xterm/addon-canvas';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { TerminalRenderer } from '../shared/terminal/types.js';
 
 /**
@@ -12,8 +10,6 @@ import { TerminalRenderer } from '../shared/terminal/types.js';
 export class WebTerminalRenderer implements TerminalRenderer {
   private terminal: Terminal;
   private fitAddon: FitAddon;
-  private canvasAddon: CanvasAddon;
-  private webglAddon: WebglAddon;
   private inputCallback?: (input: string) => void;
   private exitCallback?: () => void;
   private currentInput: string = '';
@@ -21,8 +17,6 @@ export class WebTerminalRenderer implements TerminalRenderer {
 
   constructor() {
     this.fitAddon = new FitAddon();
-    this.canvasAddon = new CanvasAddon();
-    this.webglAddon = new WebglAddon();
     
     // Create xterm terminal with professional dark theme and enhanced ANSI support
     this.terminal = new Terminal({
@@ -49,10 +43,10 @@ export class WebTerminalRenderer implements TerminalRenderer {
         brightCyan: '#56d4dd',
         brightWhite: '#f0f6fc'
       },
-      fontFamily: '"Cascadia Code", "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Inconsolata", "Roboto Mono", "Source Code Pro", monospace',
-      fontSize: 13,
+      fontFamily: '"DejaVu Sans Mono", "Liberation Mono", "Consolas", "Menlo", "Monaco", "Cascadia Code", monospace',
+      fontSize: 14,
       lineHeight: 1.0,
-      letterSpacing: -0.2,
+      letterSpacing: -0.1,
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 1000,
@@ -71,26 +65,17 @@ export class WebTerminalRenderer implements TerminalRenderer {
       fastScrollModifier: 'alt',
       fastScrollSensitivity: 5,
       scrollSensitivity: 1,
-      smoothScrollDuration: 0,
+      // Critical settings for block character rendering
+      minimumContrastRatio: 1,
+      overviewRulerWidth: 0,
+      // Force precise character positioning
+      rescaleOverlappingGlyphs: true,
+      customGlyphs: true,
+      smoothScrollDuration: 0
     });
 
-    // Load addons for enhanced rendering - try WebGL first, fallback to Canvas
+    // Load fit addon for terminal sizing
     this.terminal.loadAddon(this.fitAddon);
-    
-    try {
-      // Try WebGL first for best performance and accuracy
-      this.terminal.loadAddon(this.webglAddon);
-      
-      // Handle WebGL context loss
-      this.webglAddon.onContextLoss(() => {
-        console.warn('WebGL context lost, falling back to Canvas renderer');
-        this.webglAddon.dispose();
-        this.terminal.loadAddon(this.canvasAddon);
-      });
-    } catch (error) {
-      console.warn('WebGL not supported, using Canvas renderer:', error);
-      this.terminal.loadAddon(this.canvasAddon);
-    }
     
     this.setupXtermHandlers();
   }
