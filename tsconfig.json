@@ -16,7 +16,7 @@
   },
   "include": [
     "cli/**/*",
-    "web/**/*",
+    "app/**/*",
     "tests/**/*"
   ],
   "exclude": [

@@ -1,7 +1,7 @@
 import { createPublicClient, http, PublicClient, Chain } from 'viem';
 import * as chains from 'viem/chains';
 
-// Supported chains - including both mainnet and testnet chains
+
 export const SUPPORTED_CHAINS: Array<Chain> = [
   chains.arbitrum,
   chains.avalanche,
@@ -13,6 +13,7 @@ export const SUPPORTED_CHAINS: Array<Chain> = [
   chains.optimism,
   chains.polygon,
   chains.sonic,
+  chains.unichain,
   chains.zksync,
 ];
 
@@ -69,10 +70,59 @@ export function getChainById(chainId: number): Chain | null {
 }
 
 /**
- * Get list of all supported chain names
+ * Get list of all supported chains with id and name
  */
-export function getSupportedChains(): string[] {
-  return Object.keys(SUPPORTED_CHAINS);
+export function getSupportedChains(): Array<{ id: number; name: string }> {
+  return SUPPORTED_CHAINS.map(chain => ({ id: chain.id, name: chain.name }));
+}
+
+/**
+ * Get list of all supported chain names only
+ */
+export function getSupportedChainNames(): string[] {
+  return SUPPORTED_CHAINS.map(chain => chain.name);
+}
+
+/**
+ * Get chain name by chain ID
+ */
+export function getChainName(chainId: number): string {
+  const chain = SUPPORTED_CHAINS.find(c => c.id === chainId);
+  return chain?.name || 'Unknown';
+}
+
+/**
+ * Get chain ID by chain input (name or ID)
+ */
+export function getChainId(chainInput: string): number {
+  // Try parsing as chain ID first
+  const chainId = parseInt(chainInput);
+  if (!isNaN(chainId)) {
+    const chain = SUPPORTED_CHAINS.find(c => c.id === chainId);
+    if (chain) {
+      return chainId;
+    }
+  }
+  
+  // Fallback to name matching
+  const normalizedInput = chainInput.toLowerCase();
+  const chain = SUPPORTED_CHAINS.find(c => {
+    const chainName = c.name.toLowerCase();
+    return (
+      chainName === normalizedInput ||
+      (normalizedInput === 'arbitrum' && chainName.includes('arbitrum')) ||
+      (normalizedInput === 'base' && chainName === 'base') ||
+      (normalizedInput === 'ethereum' && chainName === 'ethereum') ||
+      (normalizedInput === 'mainnet' && chainName === 'ethereum') ||
+      (normalizedInput === 'polygon' && chainName === 'polygon')
+    );
+  });
+  
+  if (!chain) {
+    const supportedNames = SUPPORTED_CHAINS.map(c => c.name.toLowerCase()).join(', ');
+    throw new Error(`Unsupported chain: ${chainInput}. Supported: ${supportedNames}`);
+  }
+  return chain.id;
 }
 
 /**

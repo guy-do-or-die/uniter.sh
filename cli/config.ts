@@ -54,10 +54,10 @@ export function loadConfig(): UniterConfig {
     ...DEFAULT_CONFIG,
     ...fileConfig,
     // Environment variables take precedence
-    ...(process.env.ONEINCH_API_KEY && { oneinchApiKey: process.env.ONEINCH_API_KEY }),
+    ...(process.env.VITE_ONEINCH_API_KEY && { oneinchApiKey: process.env.VITE_ONEINCH_API_KEY }),
     // Support both old WALLETCONNECT_PROJECT_ID and new REOWN_PROJECT_ID
-    ...((process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID) && { 
-      walletConnectProjectId: process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID 
+    ...((process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID) && { 
+      walletConnectProjectId: process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID 
     }),
     ...(process.env.DEFAULT_CHAIN && { defaultChain: process.env.DEFAULT_CHAIN }),
     ...(process.env.DEFAULT_MIN_USD_VALUE && { defaultMinUsdValue: parseFloat(process.env.DEFAULT_MIN_USD_VALUE) }),
@@ -90,11 +90,11 @@ export function validateConfig(config: UniterConfig): { valid: boolean; missing:
   const missing: string[] = [];
   
   if (!config.oneinchApiKey) {
-    missing.push('ONEINCH_API_KEY environment variable');
+    missing.push('VITE_ONEINCH_API_KEY environment variable');
   }
   
   if (!config.walletConnectProjectId) {
-    missing.push('WALLETCONNECT_PROJECT_ID environment variable');
+    missing.push('VITE_WALLETCONNECT_PROJECT_ID environment variable');
   }
   
   return {

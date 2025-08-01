@@ -3,21 +3,22 @@
  * Works in both Node.js and browser environments
  */
 
-import { SUPPORTED_CHAINS } from '../cli/chains.js';
-import * as defaultApi from './platform-agnostic-api.js';
+import { getChainById, getSupportedChains } from './chains.js';
+import * as defaultApi from './api.js';
 import { 
   TokenBalance, 
   processTokenBalances, 
   filterTokens, 
   categorizeTokens, 
   calculatePortfolioStats 
-} from './platform-agnostic-token-processor.js';
+} from './token-processor.js';
 
 // API interface for dependency injection
 export interface ApiImplementation {
   getWalletBalances: typeof defaultApi.getWalletBalances;
   getTokenMetadata: typeof defaultApi.getTokenMetadata;
   getQuote: typeof defaultApi.getQuote;
+  findUsdcAddress: typeof defaultApi.findUsdcAddress;
 }
 
 // Token scan config interface
@@ -56,7 +57,7 @@ export interface TokenScanResult {
  * @param dustThresholdUsd - Maximum USD value for dust tokens (default: $5)
  * @param api - Optional API implementation (defaults to Node.js implementation)
  */
-export async function scanTokensCore(
+export async function scanTokens(
   session: WalletSession, 
   config: TokenScanConfig,
   dustThresholdUsd: number = 5,
@@ -66,7 +67,7 @@ export async function scanTokensCore(
     throw new Error('1inch API key not configured');
   }
 
-  const chainInfo = SUPPORTED_CHAINS.find(c => c.id === session.chainId);
+  const chainInfo = getChainById(session.chainId);
   if (!chainInfo) {
     throw new Error(`Unsupported chain ID: ${session.chainId}`);
   }
@@ -88,17 +89,32 @@ export async function scanTokensCore(
       balanceData,
       tokenMetadata,
       session.chainId,
-      config.oneinchApiKey
+      config.oneinchApiKey,
+      api
     );
 
     // Apply filtering based on configuration
     // Use a low threshold for filtering (0.01) to include all valuable tokens
     // Higher thresholds are used only for categorization, not filtering
+    console.log(`🔍 DEBUG: Before filtering - ${processedTokens.length} tokens processed`);
     const filteredTokens = filterTokens(processedTokens, {
       minUSDValue: 0.01, // Low threshold to include tokens like KAITO ($2.33) and CLANKER ($1.99)
       maxTokensToProcess: config.maxTokensToProcess || 100,
       excludeZeroBalances: true,
     });
+    console.log(`🔍 DEBUG: After filtering - ${filteredTokens.length} tokens remain`);
+    
+    // Show what got filtered out
+    const filteredOut = processedTokens.filter(t => !filteredTokens.includes(t));
+    if (filteredOut.length > 0) {
+      console.log(`🗑️ DEBUG: ${filteredOut.length} tokens filtered out:`);
+      filteredOut.slice(0, 5).forEach(token => {
+        console.log(`   - ${token.symbol}: ${token.balanceFormatted} (USD: $${token.balanceUSD.toFixed(2)})`);
+      });
+      if (filteredOut.length > 5) {
+        console.log(`   ... and ${filteredOut.length - 5} more`);
+      }
+    }
 
     // Categorize tokens by USD value
     const { dustTokens, mediumTokens, significantTokens } = categorizeTokens(
@@ -140,7 +156,7 @@ export async function scanTokensCore(
  * @param dustThresholdUsd - Maximum USD value for dust tokens (default: $5)
  * @param api - Optional API implementation (defaults to Node.js implementation)
  */
-export async function scanTokensMultiChainCore(
+export async function scanTokensMultiChain(
   session: WalletSession,
   config: TokenScanConfig,
   dustThresholdUsd: number = 5,
@@ -160,7 +176,7 @@ export async function scanTokensMultiChainCore(
   console.log(`🔄 Demo mode: ${session.isDemo ? 'Yes' : 'No'}`);
   
   // Scan tokens on all supported chains
-  for (const chain of SUPPORTED_CHAINS) {
+  for (const chain of getSupportedChains()) {
     try {
       console.log(`🔍 Scanning ${chain.name} (${chain.id})...`);
       
@@ -173,7 +189,7 @@ export async function scanTokensMultiChainCore(
       };
       
       // Pass the same API implementation to ensure consistent behavior
-      const result = await scanTokensCore(walletSession, config, dustThresholdUsd, api);
+      const result = await scanTokens(walletSession, config, dustThresholdUsd, api);
       
       // Add chain name to the result for display in the UI
       result.chainName = chain.name;

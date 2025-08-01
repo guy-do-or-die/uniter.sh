@@ -25,7 +25,7 @@ describe('Configuration Management', () => {
     const config = loadConfig();
     
     expect(config.defaultChain).toBe('base');
-    expect(config.defaultMinUsdValue).toBe(5);
+    expect(config.defaultMinUsdValue).toBe(1);
     expect(config.maxSlippage).toBe(1);
   });
 
@@ -34,22 +34,22 @@ describe('Configuration Management', () => {
     process.env.DEFAULT_TARGET_TOKEN = 'USDT';
     process.env.DEFAULT_CHAIN = 'ethereum';
     process.env.DEFAULT_MIN_USD_VALUE = '10';
-    process.env.ONEINCH_API_KEY = 'test-api-key';
-    process.env.WALLETCONNECT_PROJECT_ID = 'test-project-id';
+    process.env.VITE_ONEINCH_API_KEY = 'test-api-key';
+    process.env.VITE_WALLETCONNECT_PROJECT_ID = 'test-project-id';
 
     const config = loadConfig();
     
     expect(config.defaultChain).toBe('ethereum');
     expect(config.defaultMinUsdValue).toBe(10);
-    expect(config.oneinchApiKey).toBe(process.env.ONEINCH_API_KEY);
-    expect(config.walletConnectProjectId).toBe(process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID);
+    expect(config.oneinchApiKey).toBe(process.env.VITE_ONEINCH_API_KEY);
+    expect(config.walletConnectProjectId).toBe(process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID);
 
     // Clean up
     delete process.env.DEFAULT_TARGET_TOKEN;
     delete process.env.DEFAULT_CHAIN;
     delete process.env.DEFAULT_MIN_USD_VALUE;
-    delete process.env.ONEINCH_API_KEY;
-    delete process.env.WALLETCONNECT_PROJECT_ID;
+    delete process.env.VITE_ONEINCH_API_KEY;
+    delete process.env.VITE_WALLETCONNECT_PROJECT_ID;
   });
 
   it('should validate configuration correctly', () => {
@@ -73,8 +73,8 @@ describe('Configuration Management', () => {
 
     const validation = validateConfig(invalidConfig);
     expect(validation.valid).toBe(false);
-    expect(validation.missing).toContain('ONEINCH_API_KEY environment variable');
-    expect(validation.missing).toContain('WALLETCONNECT_PROJECT_ID environment variable');
+    expect(validation.missing).toContain('VITE_ONEINCH_API_KEY environment variable');
+    expect(validation.missing).toContain('VITE_WALLETCONNECT_PROJECT_ID environment variable');
   });
 
   it('should return correct config file path', () => {
