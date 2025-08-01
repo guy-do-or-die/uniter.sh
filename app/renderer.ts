@@ -2,6 +2,8 @@ import '@xterm/xterm/css/xterm.css';
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { CanvasAddon } from '@xterm/addon-canvas';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { TerminalRenderer } from '../shared/terminal/types.js';
 
 /**
@@ -10,6 +12,8 @@ import { TerminalRenderer } from '../shared/terminal/types.js';
 export class WebTerminalRenderer implements TerminalRenderer {
   private terminal: Terminal;
   private fitAddon: FitAddon;
+  private canvasAddon: CanvasAddon;
+  private webglAddon: WebglAddon;
   private inputCallback?: (input: string) => void;
   private exitCallback?: () => void;
   private currentInput: string = '';
@@ -17,8 +21,10 @@ export class WebTerminalRenderer implements TerminalRenderer {
 
   constructor() {
     this.fitAddon = new FitAddon();
+    this.canvasAddon = new CanvasAddon();
+    this.webglAddon = new WebglAddon();
     
-    // Create xterm terminal with professional dark theme
+    // Create xterm terminal with professional dark theme and enhanced ANSI support
     this.terminal = new Terminal({
       theme: {
         background: '#0d1117',
@@ -43,16 +49,49 @@ export class WebTerminalRenderer implements TerminalRenderer {
         brightCyan: '#56d4dd',
         brightWhite: '#f0f6fc'
       },
-      fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", "SF Mono", Monaco, "Inconsolata", "Roboto Mono", "Source Code Pro", monospace',
-      fontSize: 14,
-      lineHeight: 1.2,
+      fontFamily: '"Cascadia Code", "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Inconsolata", "Roboto Mono", "Source Code Pro", monospace',
+      fontSize: 13,
+      lineHeight: 1.0,
+      letterSpacing: -0.2,
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 1000,
       tabStopWidth: 4,
+      allowProposedApi: true,
+      allowTransparency: false,
+      macOptionIsMeta: true,
+      rightClickSelectsWord: true,
+      windowsMode: false,
+      convertEol: false,
+      screenReaderMode: false,
+      disableStdin: false,
+      logLevel: 'warn',
+      // Additional settings for better ANSI art rendering
+      drawBoldTextInBrightColors: false,
+      fastScrollModifier: 'alt',
+      fastScrollSensitivity: 5,
+      scrollSensitivity: 1,
+      smoothScrollDuration: 0,
     });
 
+    // Load addons for enhanced rendering - try WebGL first, fallback to Canvas
     this.terminal.loadAddon(this.fitAddon);
+    
+    try {
+      // Try WebGL first for best performance and accuracy
+      this.terminal.loadAddon(this.webglAddon);
+      
+      // Handle WebGL context loss
+      this.webglAddon.onContextLoss(() => {
+        console.warn('WebGL context lost, falling back to Canvas renderer');
+        this.webglAddon.dispose();
+        this.terminal.loadAddon(this.canvasAddon);
+      });
+    } catch (error) {
+      console.warn('WebGL not supported, using Canvas renderer:', error);
+      this.terminal.loadAddon(this.canvasAddon);
+    }
+    
     this.setupXtermHandlers();
   }
 
@@ -168,6 +207,18 @@ export class WebTerminalRenderer implements TerminalRenderer {
 
   writeBanner(content: string): void {
     this.terminal.writeln(`\x1b[1;36m${content}\x1b[0m`); // Bold cyan
+  }
+
+  // Progress update methods
+  updateProgress(content: string): void {
+    // Clear current line and write progress
+    this.terminal.write('\r\x1b[K'); // Clear line
+    this.terminal.write(`\x1b[33m${content}\x1b[0m`); // Yellow progress text
+  }
+
+  clearProgress(): void {
+    // Clear current line
+    this.terminal.write('\r\x1b[K');
   }
 
   // Input/prompt methods

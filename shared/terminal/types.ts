@@ -31,8 +31,8 @@ export interface EnvironmentAdapter {
   restoreSession(): Promise<any>;
   
   // Token operations
-  scanTokens(session: any, chainId: number): Promise<any>;
-  scanTokensMultiChain(session: any): Promise<any>;
+  scanTokens(session: any, chainId: number, onProgress?: (progress: any) => void): Promise<any>;
+  scanTokensMultiChain(session: any, onProgress?: (progress: any) => void): Promise<any>;
  
   // Environment info
   getEnvironment(): TerminalEnvironment;
@@ -53,6 +53,10 @@ export interface TerminalRenderer {
   writeWarning(content: string): void;
   writeInfo(content: string): void;
   writeBanner(content: string): void;
+  
+  // Progress update methods
+  updateProgress(content: string): void;
+  clearProgress(): void;
   
   // Input/prompt methods
   showPrompt(prompt: string): void;

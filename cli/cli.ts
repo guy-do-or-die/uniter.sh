@@ -18,6 +18,17 @@ async function main() {
   const engine = new UnifiedTerminalEngine(adapter);
   const renderer = new CliTerminalRenderer(engine);
 
+  // Set renderer for interactive features
+  engine.setRenderer(renderer.getRenderer());
+
+  // Display startup logo
+  const logoOutput = engine.displayStartupLogo();
+  logoOutput.forEach(output => {
+    if (output.type === 'info') {
+      console.log(chalk.cyan(output.content));
+    }
+  });
+
   // Try to restore previous session
   await restoreSession();
 

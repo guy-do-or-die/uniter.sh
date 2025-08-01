@@ -25,8 +25,21 @@ export interface ApiImplementation {
 export interface TokenScanConfig {
   oneinchApiKey: string;
   maxTokensToProcess?: number;
+  onProgress?: (progress: ScanProgress) => void;
   excludeTokens?: string[];
   defaultMinUsdValue?: number;
+}
+
+export interface ScanProgress {
+  phase: 'starting' | 'fetching' | 'fetching_balances' | 'balances_received' | 'fetching_metadata' | 'metadata_received' | 'processing' | 'pricing' | 'filtering' | 'complete';
+  chainName?: string;
+  chainId?: number;
+  currentToken?: string;
+  tokenIndex?: number;
+  totalTokens?: number;
+  tokenCount?: number;
+  metadataCount?: number;
+  message: string;
 }
 
 /**

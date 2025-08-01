@@ -15,7 +15,8 @@ import type {
   WalletSession,
   TokenScanConfig,
   TokenScanResult,
-  ApiImplementation
+  ApiImplementation,
+  ScanProgress
 } from './types.js';
 
 /**
@@ -38,16 +39,67 @@ export async function scanTokens(
   }
 
   try {
-    console.log(`🔄 Scanning ${chainInfo.name} for token balances...`);
+    // Report starting phase
+    config.onProgress?.({
+      phase: 'starting',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      message: `Starting scan on ${chainInfo.name} (Chain ID: ${session.chainId})`
+    });
     
-    // Fetch data from 1inch API using provided API implementation
-    const [balanceData, tokenMetadata] = await Promise.all([
-      api.getWalletBalances(session.chainId, session.address, config.oneinchApiKey),
-      api.getTokenMetadata(session.chainId, config.oneinchApiKey)
-    ]);
+    console.log(`Scanning ${chainInfo.name} for token balances...`);
     
-    console.log('📊 Raw balance data:', Object.keys(balanceData).length, 'tokens found');
-    console.log('📊 Token metadata:', Object.keys(tokenMetadata).length, 'tokens available');
+    // Report fetching balances phase
+    config.onProgress?.({
+      phase: 'fetching_balances',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      message: `Fetching wallet balances from ${chainInfo.name}`
+    });
+    
+    const balanceData = await api.getWalletBalances(session.chainId, session.address, config.oneinchApiKey);
+    const tokenCount = Object.keys(balanceData).length;
+    
+    // Report balance results
+    config.onProgress?.({
+      phase: 'balances_received',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      tokenCount,
+      message: `Found ${tokenCount} tokens with balances on ${chainInfo.name}`
+    });
+    
+    // Report fetching metadata phase
+    config.onProgress?.({
+      phase: 'fetching_metadata',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      message: `Fetching token metadata from ${chainInfo.name}`
+    });
+    
+    const tokenMetadata = await api.getTokenMetadata(session.chainId, config.oneinchApiKey);
+    const metadataCount = Object.keys(tokenMetadata).length;
+    
+    // Report metadata results
+    config.onProgress?.({
+      phase: 'metadata_received',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      metadataCount,
+      message: `Loaded metadata for ${metadataCount} tokens on ${chainInfo.name}`
+    });
+    
+    console.log('📊 Raw balance data:', tokenCount, 'tokens found');
+    console.log('📊 Token metadata:', metadataCount, 'tokens available');
+
+    // Report processing phase
+    config.onProgress?.({
+      phase: 'processing',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      totalTokens: tokenCount,
+      message: `Processing ${tokenCount} tokens on ${chainInfo.name}`
+    });
 
     // Process tokens and calculate USD values
     const processedTokens = await processTokenBalances(
@@ -55,17 +107,36 @@ export async function scanTokens(
       tokenMetadata,
       session.chainId,
       config.oneinchApiKey,
-      api
+      api,
+      config.onProgress
     );
 
+    // Report filtering phase
+    config.onProgress?.({
+      phase: 'filtering',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      totalTokens: processedTokens.length,
+      message: `Filtering ${processedTokens.length} processed tokens on ${chainInfo.name}`
+    });
+
     // Apply filtering based on configuration
-    console.log(`🔍 DEBUG: Before filtering - ${processedTokens.length} tokens processed`);
+    console.log(`DEBUG: Before filtering - ${processedTokens.length} tokens processed`);
     const filteredTokens = filterTokens(processedTokens, {
       minUSDValue: 0.01, // Low threshold to include valuable tokens
       maxTokensToProcess: config.maxTokensToProcess || 100,
       excludeZeroBalances: true,
     });
-    console.log(`🔍 DEBUG: After filtering - ${filteredTokens.length} tokens remain`);
+    console.log(`DEBUG: After filtering - ${filteredTokens.length} tokens remain`);
+    
+    // Report filtering results
+    config.onProgress?.({
+      phase: 'filtering',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      totalTokens: filteredTokens.length,
+      message: `Filtered to ${filteredTokens.length} valuable tokens on ${chainInfo.name}`
+    });
 
     // Categorize tokens by USD value
     const { dustTokens, mediumTokens, significantTokens } = categorizeTokens(
@@ -76,6 +147,15 @@ export async function scanTokens(
 
     // Calculate portfolio stats
     const { totalUSD } = calculatePortfolioStats(filteredTokens);
+
+    // Report completion with detailed summary
+    config.onProgress?.({
+      phase: 'complete',
+      chainName: chainInfo.name,
+      chainId: session.chainId,
+      totalTokens: filteredTokens.length,
+      message: `Scan complete on ${chainInfo.name}: $${totalUSD.toFixed(2)} across ${filteredTokens.length} tokens (${significantTokens.length} significant, ${mediumTokens.length} medium, ${dustTokens.length} dust)`
+    });
 
     // Return scan results
     return {
@@ -124,8 +204,18 @@ export async function scanTokensMultiChain(
   console.log(`🔄 Demo mode: ${session.isDemo ? 'Yes' : 'No'}`);
   
   // Scan tokens on all supported chains
-  for (const chain of getSupportedChains()) {
+  const chains = getSupportedChains();
+  for (let i = 0; i < chains.length; i++) {
+    const chain = chains[i];
     try {
+      // Report chain progress
+      config.onProgress?.({
+        phase: 'starting',
+        chainName: chain.name,
+        chainId: chain.id,
+        message: `Scanning chain ${i + 1}/${chains.length}: ${chain.name}...`
+      });
+      
       console.log(`🔍 Scanning ${chain.name} (${chain.id})...`);
       
       const walletSession = {

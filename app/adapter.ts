@@ -51,7 +51,7 @@ export class WebAdapter implements EnvironmentAdapter {
   }
 
   // Token operations - using platform-agnostic scanning logic with browser API
-  async scanTokens(session: any, chainId: number): Promise<any> {
+  async scanTokens(session: any, chainId: number, onProgress?: (progress: any) => void): Promise<any> {
     if (!session || !session.address) {
       throw new Error('No wallet session available');
     }
@@ -71,12 +71,12 @@ export class WebAdapter implements EnvironmentAdapter {
       topic: '' // Not needed for web environment
     };
     
-    // Use the truly unified scanner - same function as CLI
-    const { result } = await unifiedScan(walletSession, browserConfig.oneinchApiKey, 5);
+    // Use the truly unified scanner with progress callback
+    const { result } = await unifiedScan(walletSession, browserConfig.oneinchApiKey, 5, onProgress);
     return result;
   }
 
-  async scanTokensMultiChain(session: any): Promise<any> {
+  async scanTokensMultiChain(session: any, onProgress?: (progress: any) => void): Promise<any> {
     if (!session || !session.address) {
       throw new Error('No wallet session available');
     }
@@ -102,8 +102,8 @@ export class WebAdapter implements EnvironmentAdapter {
       console.log('Running in demo mode with address:', session.address);
     }
     
-    // Use unified multi-chain scanner - same function as CLI
-    const { results } = await scanMultichain(walletSession, browserConfig.oneinchApiKey, browserConfig.defaultMinUsdValue || 5);
+    // Use unified multi-chain scanner with progress callback
+    const { results } = await scanMultichain(walletSession, browserConfig.oneinchApiKey, browserConfig.defaultMinUsdValue || 5, onProgress);
     return results;
   }
 

@@ -78,7 +78,19 @@ export class CliTerminalRenderer implements TerminalRenderer {
   }
 
   writeBanner(content: string): void {
-    console.log(chalk.cyan.bold(content));
+    console.log(chalk.bold.cyan(content));
+  }
+
+  // Progress update methods
+  updateProgress(content: string): void {
+    // Clear current line and write progress
+    process.stdout.write('\r\x1b[K'); // Clear line
+    process.stdout.write(chalk.yellow(content));
+  }
+
+  clearProgress(): void {
+    // Clear current line and move to next
+    process.stdout.write('\r\x1b[K\n');
   }
 
   // Input/prompt methods

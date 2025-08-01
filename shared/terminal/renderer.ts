@@ -17,6 +17,8 @@ export class UnifiedTerminalRenderer {
   constructor(engine: UnifiedTerminalEngine, renderer: TerminalRenderer) {
     this.engine = engine;
     this.renderer = renderer;
+    // Set renderer reference in engine for progress updates
+    this.engine.setRenderer(renderer);
     this.setupEventHandlers();
   }
 

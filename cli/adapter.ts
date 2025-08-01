@@ -30,7 +30,7 @@ export class CliAdapter implements EnvironmentAdapter {
   }
 
   // Token operations
-  async scanTokens(session: any, chainId: number): Promise<any> {
+  async scanTokens(session: any, chainId: number, onProgress?: (progress: any) => void): Promise<any> {
     // Load API key from config
     const config = loadConfig();
     if (!config.oneinchApiKey) {
@@ -45,21 +45,21 @@ export class CliAdapter implements EnvironmentAdapter {
       topic: session.topic || ''
     };
 
-    // Use the truly unified scanner - same function as web
-    const { result } = await unifiedScan(walletSession, config.oneinchApiKey, 5);
+    // Use the truly unified scanner with progress callback
+    const { result } = await unifiedScan(walletSession, config.oneinchApiKey, 5, onProgress);
     
     // Return result only - let terminal engine handle display (same as web)
     return result;
   }
 
-  async scanTokensMultiChain(session: any): Promise<any> {
+  async scanTokensMultiChain(session: any, onProgress?: (progress: any) => void): Promise<any> {
     const config = loadConfig();
     if (!config.oneinchApiKey) {
       throw new Error('1inch API key not found in config');
     }
     
-    // Use the unified multi-chain scanner - same function as web
-    const { results } = await scanMultichain(session, config.oneinchApiKey, config.defaultMinUsdValue || 5);
+    // Use the unified multi-chain scanner with progress callback
+    const { results } = await scanMultichain(session, config.oneinchApiKey, config.defaultMinUsdValue || 5, onProgress);
     return results;
   }
 

@@ -119,13 +119,26 @@ export async function processTokenBalances(
   tokenMetadata: OneInchTokenMetadata,
   chainId: number,
   apiKey: string,
-  api: ApiImplementation
+  api: ApiImplementation,
+  onProgress?: (progress: any) => void
 ): Promise<TokenBalance[]> {
   const tokens: TokenBalance[] = [];
+  const tokenEntries = Object.entries(balanceData);
+  const totalTokens = tokenEntries.length;
   
-  for (const [address, balance] of Object.entries(balanceData)) {
+  for (let i = 0; i < tokenEntries.length; i++) {
+    const [address, balance] = tokenEntries[i];
     const metadata = tokenMetadata[address.toLowerCase()];
     if (!metadata) continue;
+    
+    // Report progress for current token
+    onProgress?.({
+      phase: 'pricing',
+      currentToken: metadata.symbol,
+      tokenIndex: i + 1,
+      totalTokens,
+      message: `Pricing ${metadata.symbol} (${i + 1}/${totalTokens})`
+    });
     
     try {
       // Use viem for reliable token value parsing
@@ -152,8 +165,27 @@ export async function processTokenBalances(
         balanceNum,
         balanceUSD
       });
+      
+      // Report completion for current token with value
+      onProgress?.({
+        phase: 'pricing',
+        currentToken: metadata.symbol,
+        tokenIndex: i + 1,
+        totalTokens,
+        message: `${metadata.symbol}: $${balanceUSD.toFixed(2)} (${i + 1}/${totalTokens})`
+      });
+      
     } catch (error) {
       console.warn(`Failed to process token ${metadata.symbol}:`, error);
+      
+      // Report error for current token
+      onProgress?.({
+        phase: 'pricing',
+        currentToken: metadata.symbol,
+        tokenIndex: i + 1,
+        totalTokens,
+        message: `${metadata.symbol}: Failed to price (${i + 1}/${totalTokens})`
+      });
     }
   }
   

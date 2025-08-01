@@ -1,6 +1,10 @@
 import { getChainId, getChainName, getSupportedChains } from '../chains.js';
 import { generateTokenScanOutput } from './display.js';
-import type { TerminalOutput, TerminalCommand, EnvironmentAdapter } from './types.js';
+
+import { logoData } from './logo.js';
+
+import type { TerminalOutput, TerminalCommand, EnvironmentAdapter, TerminalRenderer } from './types.js';
+import type { ScanProgress } from '../types.js';
 
 /**
  * Unified terminal engine that works in both CLI and web environments
@@ -8,10 +12,60 @@ import type { TerminalOutput, TerminalCommand, EnvironmentAdapter } from './type
 export class UnifiedTerminalEngine {
   private commands: Map<string, TerminalCommand> = new Map();
   private adapter: EnvironmentAdapter;
+  private renderer?: TerminalRenderer;
 
   constructor(adapter: EnvironmentAdapter) {
     this.adapter = adapter;
     this.initializeCommands();
+  }
+
+  /**
+   * Set the renderer for interactive progress updates
+   */
+  setRenderer(renderer: TerminalRenderer): void {
+    this.renderer = renderer;
+  }
+
+  /**
+   * Display startup logo and welcome message
+   */
+  displayStartupLogo(): TerminalOutput[] {
+    if (this.renderer) {
+      // Get colors based on environment
+      const colors = this.getTerminalColors();
+      
+      return [
+        { type: 'info', content: 'Welcome to Uniter.sh - Unified DeFi Terminal' },
+        { type: 'info', content: 'Type "help" to see available commands.' }
+      ];
+    }
+    
+    return [
+      { type: 'info', content: '▶ UNITER.SH - Unified DeFi Terminal' },
+      { type: 'info', content: 'Type "help" to see available commands.' }
+    ];
+  }
+
+  /**
+   * Get terminal colors based on environment
+   */
+  private getTerminalColors(): { primary: string; accent: string; reset: string } {
+    // Check if we're in a CLI environment with chalk support
+    if (typeof process !== 'undefined' && process.stdout && process.stdout.isTTY) {
+      // CLI environment - use ANSI colors
+      return {
+        primary: '\x1b[36m', // Cyan
+        accent: '\x1b[94m',   // Bright blue
+        reset: '\x1b[0m'     // Reset
+      };
+    } else {
+      // Web environment - no colors for now (xterm.js handles this differently)
+      return {
+        primary: '',
+        accent: '',
+        reset: ''
+      };
+    }
   }
 
   /**
@@ -171,23 +225,35 @@ export class UnifiedTerminalEngine {
   }
 
   /**
-   * Get startup banner
+   * Get startup banner with logo
    */
   getStartupBanner(): TerminalOutput[] {
     const env = this.adapter.getEnvironment();
     const envInfo = env.isBrowser ? 'Web Terminal' : 'CLI Terminal';
     const capabilities = env.canConnectWallet ? 'Full Functionality' : 'Demo Mode';
     
-    return [
-      {
+    const outputs: TerminalOutput[] = [];
+    
+    // Add colored ASCII art logo right before CLI Terminal message
+    if (logoData) {
+      outputs.push({
         type: 'banner',
-        content: `Welcome to uniter.sh (${envInfo} - ${capabilities})`
+        content: logoData
+      });
+    }
+    
+    outputs.push(
+      {
+        type: 'info',
+        content: `${envInfo} - ${capabilities}`
       },
       {
         type: 'info',
         content: 'Type "help" to see available commands'
       }
-    ];
+    );
+    
+    return outputs;
   }
 
   /**
@@ -373,19 +439,49 @@ export class UnifiedTerminalEngine {
       const chainId = getChainId(chainInput);
       const chainName = getChainName(chainId);
 
-      const output: TerminalOutput[] = [{
-        type: 'info',
-        content: `🔄 Scanning ${chainName} for token balances...`
-      }];
+      // Display logo and loading message
+      if (this.renderer) {
+        const colors = this.getTerminalColors();
+        this.renderer.writeln(`Starting scan on ${chainName}...`);
+      }
 
-      const scanResult = await this.adapter.scanTokens(session, chainId);
+      const output: TerminalOutput[] = [];
+
+      // Create progress callback for interactive updates
+      const onProgress = (progress: ScanProgress) => {
+        if (this.renderer) {
+          if (progress.phase !== 'pricing') {
+            // Major phases: display immediately as permanent output, then clear progress
+            this.renderer.clearProgress();
+            this.renderer.writeln(progress.message);
+          } else {
+            // Individual token pricing: show as in-place updates only
+            this.renderer.updateProgress(progress.message);
+          }
+        }
+      };
+
+      const scanResult = await this.adapter.scanTokens(session, chainId, onProgress);
       
-      // Use unified display function for consistent formatting
+      // Clear progress display
+      if (this.renderer) {
+        this.renderer.clearProgress();
+      }
+      
+      // Display results line by line as they're generated
       const displayOutput = generateTokenScanOutput(scanResult);
-      output.push(...displayOutput);
+      if (this.renderer) {
+        displayOutput.forEach(item => {
+          this.renderer!.writeln(item.content);
+        });
+      }
 
       return output;
     } catch (error) {
+      // Clear progress on error
+      if (this.renderer) {
+        this.renderer.clearProgress();
+      }
       return [{
         type: 'error',
         content: `Scan failed: ${error instanceof Error ? error.message : String(error)}`
@@ -412,44 +508,68 @@ export class UnifiedTerminalEngine {
     }
 
     try {
-      const output: TerminalOutput[] = [{
-        type: 'info',
-        content: '🌐 Starting multichain scan across all supported chains...'
-      }];
+      // Display logo and loading message
+      if (this.renderer) {
+        const colors = this.getTerminalColors();
+        this.renderer.writeln('Starting multichain scan across all supported chains...');
+      }
 
-      // Get scan results from adapter
-      const results = await this.adapter.scanTokensMultiChain(session);
+      const output: TerminalOutput[] = [];
+
+      // Create progress callback for interactive updates
+      const onProgress = (progress: ScanProgress) => {
+        if (this.renderer) {
+          if (progress.phase !== 'pricing') {
+            // Major phases: display immediately as permanent output, then clear progress
+            this.renderer.clearProgress();
+            this.renderer.writeln(progress.message);
+          } else {
+            // Individual token pricing: show as in-place updates only
+            this.renderer.updateProgress(progress.message);
+          }
+        }
+      };
+
+      // Get scan results from adapter with progress callback
+      const results = await this.adapter.scanTokensMultiChain(session, onProgress);
       
-      // Display results for each chain using unified display logic
+      // Clear progress display
+      if (this.renderer) {
+        this.renderer.clearProgress();
+      }
+      
+      // Display results for each chain line by line
       if (results && results.length > 0) {
         results.forEach((result: any) => {
-          // Add chain header
-          output.push({
-            type: 'info',
-            content: `\n🔗 ${result.chainName || 'Chain ' + result.chainId} Results:`
-          });
+          // Display chain header immediately
+          if (this.renderer) {
+            this.renderer.writeln(`\n🔗 ${result.chainName || 'Chain ' + result.chainId} Results:`);
+          }
           
-          // Use unified display function for consistent formatting
+          // Display chain results line by line
           const displayOutput = generateTokenScanOutput(result);
-          output.push(...displayOutput);
+          if (this.renderer) {
+            displayOutput.forEach(item => {
+              this.renderer!.writeln(item.content);
+            });
+          }
         });
         
-        // Add multi-chain summary
+        // Display multi-chain summary line by line
         const totalValue = results.reduce((sum: number, r: any) => sum + (r.totalUSD || 0), 0);
         const totalTokens = results.reduce((sum: number, r: any) => sum + (r.allTokens?.length || 0), 0);
         
-        output.push(
-          { type: 'info', content: '' },
-          { type: 'info', content: '🌐 Multi-Chain Summary:' },
-          { type: 'info', content: `💰 Total Portfolio Value: $${totalValue.toFixed(2)}` },
-          { type: 'info', content: `🪙 Total Tokens: ${totalTokens}` },
-          { type: 'info', content: `⛓️ Chains Scanned: ${results.length}` }
-        );
+        if (this.renderer) {
+          this.renderer.writeln('');
+          this.renderer.writeln('🌐 Multi-Chain Summary:');
+          this.renderer.writeln(`💰 Total Portfolio Value: $${totalValue.toFixed(2)}`);
+          this.renderer.writeln(`🪙 Total Tokens: ${totalTokens}`);
+          this.renderer.writeln(`⛓️ Chains Scanned: ${results.length}`);
+        }
       } else {
-        output.push({
-          type: 'info',
-          content: '❌ No tokens found across all chains'
-        });
+        if (this.renderer) {
+          this.renderer.writeln('❌ No tokens found across all chains');
+        }
       }
       
       output.push({

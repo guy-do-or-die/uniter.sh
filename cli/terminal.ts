@@ -27,6 +27,13 @@ export class CliTerminalRenderer {
   }
 
   /**
+   * Get the underlying renderer that implements TerminalRenderer interface
+   */
+  getRenderer(): CliRenderer {
+    return this.cliRenderer;
+  }
+
+  /**
    * Close the terminal
    */
   close(): void {

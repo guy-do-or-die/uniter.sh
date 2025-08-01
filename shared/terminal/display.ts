@@ -51,52 +51,38 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
   if (!scanResult || !scanResult.tokens || scanResult.tokens.length === 0) {
     output.push({
       type: 'info',
-      content: '✅ Scan complete - No tokens with balances found'
+      content: 'Scan complete - No tokens found'
     });
     return output;
   }
   
-  // Success message with count
-  output.push({
-    type: 'success',
-    content: `✅ Found ${scanResult.tokens.length} tokens with balances on ${scanResult.chainName}`
-  });
-  
-  // Portfolio summary
+  // Portfolio summary header
   output.push({
     type: 'info',
-    content: '\n============================================================'
+    content: '\n┌─ PORTFOLIO SUMMARY ─────────────────────────────────────┐'
   });
   output.push({
     type: 'info',
-    content: '🪙 TOKEN PORTFOLIO SUMMARY'
+    content: `│ Total Value: ${formatUsdValue(scanResult.totalUSD).padEnd(42)} │`
   });
   output.push({
     type: 'info',
-    content: '============================================================'
+    content: `│ Total Tokens: ${scanResult.allTokens.length.toString().padEnd(40)} │`
   });
   output.push({
     type: 'info',
-    content: `💰 Total Value: ${formatUsdValue(scanResult.totalUSD)}`
+    content: `│ Dust Tokens: ${scanResult.dustTokens.length.toString().padEnd(41)} │`
   });
   output.push({
     type: 'info',
-    content: `🔢 Total Tokens: ${scanResult.allTokens.length}`
-  });
-  output.push({
-    type: 'info',
-    content: `🧹 Dust Tokens: ${scanResult.dustTokens.length}`
-  });
-  output.push({
-    type: 'info',
-    content: '============================================================'
+    content: '└─────────────────────────────────────────────────────────┘'
   });
   
   // Display significant tokens
   if (scanResult.significantTokens && scanResult.significantTokens.length > 0) {
     output.push({
       type: 'info',
-      content: '💎 SIGNIFICANT TOKENS:'
+      content: '\n▶ SIGNIFICANT TOKENS'
     });
     
     scanResult.significantTokens.forEach((token: any, index: number) => {
@@ -104,7 +90,7 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
       const usdValue = formatUsdValue(token.balanceUSD || token.usdValue);
       output.push({
         type: 'info',
-        content: `${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
+        content: `  ${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
       });
     });
   }
@@ -113,7 +99,7 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
   if (scanResult.mediumTokens && scanResult.mediumTokens.length > 0) {
     output.push({
       type: 'info',
-      content: '\n🔸 MEDIUM TOKENS:'
+      content: '\n▶ MEDIUM TOKENS'
     });
     
     scanResult.mediumTokens.forEach((token: any, index: number) => {
@@ -121,7 +107,7 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
       const usdValue = formatUsdValue(token.balanceUSD || token.usdValue);
       output.push({
         type: 'info',
-        content: `${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
+        content: `  ${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
       });
     });
   }
@@ -130,7 +116,7 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
   if (scanResult.dustTokens && scanResult.dustTokens.length > 0) {
     output.push({
       type: 'info',
-      content: '\n🧹 DUST TOKENS (sample):'
+      content: '\n▶ DUST TOKENS'
     });
     
     scanResult.dustTokens.slice(0, 5).forEach((token: any, index: number) => {
@@ -138,14 +124,14 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
       const usdValue = formatUsdValue(token.balanceUSD || token.usdValue);
       output.push({
         type: 'info',
-        content: `${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
+        content: `  ${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
       });
     });
     
     if (scanResult.dustTokens.length > 5) {
       output.push({
         type: 'info',
-        content: `   ... and ${scanResult.dustTokens.length - 5} more dust tokens`
+        content: `     ... and ${scanResult.dustTokens.length - 5} more`
       });
     }
   }

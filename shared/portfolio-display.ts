@@ -23,13 +23,21 @@ import type {
 export async function unifiedScan(
   session: WalletSession,
   apiKey: string,
-  dustThresholdUsd: number = 5
+  dustThresholdUsd: number = 5,
+  onProgress?: (progress: any) => void
 ): Promise<UnifiedScanResult> {
   const config: TokenScanConfig = {
     oneinchApiKey: apiKey,
     maxTokensToProcess: 1000,
     excludeTokens: [],
-    defaultMinUsdValue: dustThresholdUsd
+    defaultMinUsdValue: dustThresholdUsd,
+    onProgress: onProgress ? (progress: any) => {
+      // Temporarily restore console for progress updates
+      const tempConsole = console.log;
+      console.log = originalConsole.log;
+      onProgress(progress);
+      console.log = tempConsole;
+    } : undefined
   };
 
   // Create unified API implementation
@@ -48,11 +56,11 @@ export async function unifiedScan(
     info: console.info
   };
 
-  // Temporarily disable console suppression for debugging
-  // console.log = () => {};
-  // console.error = () => {};
-  // console.warn = () => {};
-  // console.info = () => {};
+  // Suppress console output during scan to show clean progress updates
+  console.log = () => {};
+  console.error = () => {};
+  console.warn = () => {};
+  console.info = () => {};
 
   try {
     const result = await scanTokens(session, config, dustThresholdUsd, unifiedApi);
@@ -75,7 +83,8 @@ export async function unifiedScan(
 export async function scanMultichain(
   session: WalletSession,
   apiKey: string,
-  dustThresholdUsd: number = 5
+  dustThresholdUsd: number = 5,
+  onProgress?: (progress: any) => void
 ): Promise<MultiChainScanResult> {
   const results: TokenScanResult[] = [];
   const output: OutputItem[] = [];
@@ -97,7 +106,7 @@ export async function scanMultichain(
         chainId: chain.id
       };
       
-      const { result } = await unifiedScan(chainSession, apiKey, dustThresholdUsd);
+      const { result } = await unifiedScan(chainSession, apiKey, dustThresholdUsd, onProgress);
       
       if (result.allTokens.length > 0) {
         results.push(result);
