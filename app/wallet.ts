@@ -24,7 +24,7 @@ export const config = createConfig({
   connectors: [
     injected(),
     walletConnect({ 
-      projectId: browserConfig.walletConnectProjectId,
+      projectId: browserConfig.walletConnectProjectId || 'default-project-id',
       metadata: {
         name: 'Uniter DeFi Terminal',
         description: 'Multi-chain DeFi portfolio scanner',

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { UnifiedTerminalEngine } from '../shared/engine.js';
-import { CliAdapter } from './cli-adapter.js';
+import { UnifiedTerminalEngine } from '../shared/terminal/index.js';
+import { CliAdapter } from './adapter.js';
 import { CliTerminalRenderer } from './terminal.js';
 import { restoreSession } from './wallet.js';
 import chalk from 'chalk';

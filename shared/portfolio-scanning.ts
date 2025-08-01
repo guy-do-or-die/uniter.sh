@@ -1,61 +1,26 @@
 /**
- * Platform-agnostic token scanning module
- * Works in both Node.js and browser environments
+ * Portfolio Scanning Logic
+ * Single responsibility: Orchestrate token scanning across single and multiple chains
  */
 
 import { getChainById, getSupportedChains } from './chains.js';
 import * as defaultApi from './api.js';
 import { 
-  TokenBalance, 
   processTokenBalances, 
   filterTokens, 
   categorizeTokens, 
   calculatePortfolioStats 
-} from './token-processor.js';
-
-// API interface for dependency injection
-export interface ApiImplementation {
-  getWalletBalances: typeof defaultApi.getWalletBalances;
-  getTokenMetadata: typeof defaultApi.getTokenMetadata;
-  getQuote: typeof defaultApi.getQuote;
-  findUsdcAddress: typeof defaultApi.findUsdcAddress;
-}
-
-// Token scan config interface
-export interface TokenScanConfig {
-  oneinchApiKey: string;
-  maxTokensToProcess?: number;
-  excludeTokens?: string[];
-  defaultMinUsdValue?: number;
-}
-
-// Wallet session interface
-export interface WalletSession {
-  address: string;
-  chainId: number;
-  client?: any; // Optional for browser
-  topic?: string; // Optional for browser
-  isDemo?: boolean; // Optional for demo mode
-}
-
-// Token scan result interface
-export interface TokenScanResult {
-  allTokens: TokenBalance[];
-  dustTokens: TokenBalance[];
-  mediumTokens: TokenBalance[];
-  significantTokens: TokenBalance[];
-  totalUSD: number;
-  chainId: number;
-  chainName: string;
-  tokens?: TokenBalance[]; // For backward compatibility with existing code
-}
+} from './token-processing.js';
+import type {
+  WalletSession,
+  TokenScanConfig,
+  TokenScanResult,
+  ApiImplementation
+} from './types.js';
 
 /**
  * Core token scanning function - platform agnostic
- * @param session - Wallet session containing address and chain info
- * @param config - Configuration object with API key and settings
- * @param dustThresholdUsd - Maximum USD value for dust tokens (default: $5)
- * @param api - Optional API implementation (defaults to Node.js implementation)
+ * Scans tokens on a single chain and returns structured results
  */
 export async function scanTokens(
   session: WalletSession, 
@@ -94,27 +59,13 @@ export async function scanTokens(
     );
 
     // Apply filtering based on configuration
-    // Use a low threshold for filtering (0.01) to include all valuable tokens
-    // Higher thresholds are used only for categorization, not filtering
     console.log(`🔍 DEBUG: Before filtering - ${processedTokens.length} tokens processed`);
     const filteredTokens = filterTokens(processedTokens, {
-      minUSDValue: 0.01, // Low threshold to include tokens like KAITO ($2.33) and CLANKER ($1.99)
+      minUSDValue: 0.01, // Low threshold to include valuable tokens
       maxTokensToProcess: config.maxTokensToProcess || 100,
       excludeZeroBalances: true,
     });
     console.log(`🔍 DEBUG: After filtering - ${filteredTokens.length} tokens remain`);
-    
-    // Show what got filtered out
-    const filteredOut = processedTokens.filter(t => !filteredTokens.includes(t));
-    if (filteredOut.length > 0) {
-      console.log(`🗑️ DEBUG: ${filteredOut.length} tokens filtered out:`);
-      filteredOut.slice(0, 5).forEach(token => {
-        console.log(`   - ${token.symbol}: ${token.balanceFormatted} (USD: $${token.balanceUSD.toFixed(2)})`);
-      });
-      if (filteredOut.length > 5) {
-        console.log(`   ... and ${filteredOut.length - 5} more`);
-      }
-    }
 
     // Categorize tokens by USD value
     const { dustTokens, mediumTokens, significantTokens } = categorizeTokens(
@@ -151,10 +102,7 @@ export async function scanTokens(
 
 /**
  * Scan tokens across multiple chains - platform agnostic
- * @param session - Wallet session containing address
- * @param config - Configuration object with API key and settings
- * @param dustThresholdUsd - Maximum USD value for dust tokens (default: $5)
- * @param api - Optional API implementation (defaults to Node.js implementation)
+ * Iterates through all supported chains and aggregates results
  */
 export async function scanTokensMultiChain(
   session: WalletSession,
@@ -183,19 +131,16 @@ export async function scanTokensMultiChain(
       const walletSession = {
         address: session.address,
         chainId: chain.id,
-        client: session.client, // Pass through if available
-        topic: session.topic, // Pass through if available
-        isDemo: session.isDemo // Pass through demo mode flag
+        client: session.client,
+        topic: session.topic,
+        isDemo: session.isDemo
       };
       
-      // Pass the same API implementation to ensure consistent behavior
       const result = await scanTokens(walletSession, config, dustThresholdUsd, api);
       
-      // Add chain name to the result for display in the UI
       result.chainName = chain.name;
       result.chainId = chain.id;
       
-      // Debug the result
       console.log(`📊 ${chain.name} scan result:`, 
         JSON.stringify({
           chainId: result.chainId,
@@ -208,7 +153,6 @@ export async function scanTokensMultiChain(
       
     } catch (error) {
       console.warn(`⚠️ Failed to scan ${chain.name}:`, (error as Error).message);
-      // Continue with other chains even if one fails
     }
   }
   

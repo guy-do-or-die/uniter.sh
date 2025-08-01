@@ -1,27 +1,30 @@
 /**
- * TRULY UNIFIED TOKEN SCANNER
- * Single function used by both CLI and web with identical behavior
+ * Portfolio Display and Output Formatting
+ * Single responsibility: Handle output formatting, console suppression, and display functions
  */
 
-import { generateTokenScanOutput } from './engine.js';
-import { getWalletBalances, getTokenMetadata, getQuote, findUsdcAddress } from './api.js';
 import { getSupportedChains } from './chains.js';
-
-import { TokenScanConfig, TokenScanResult, WalletSession, scanTokens } from './scanner.js';
+import { generateTokenScanOutput } from './terminal/display.js';
+import { scanTokens } from './portfolio-scanning.js';
+import * as defaultApi from './api.js';
+import type {
+  WalletSession,
+  TokenScanConfig,
+  TokenScanResult,
+  UnifiedScanResult,
+  MultiChainScanResult,
+  OutputItem
+} from './types.js';
 
 /**
- * The ONE AND ONLY scan function used by both CLI and web
- * Returns formatted terminal output - no console.log, no side effects
+ * Unified scan function with formatted output - used by both CLI and web
+ * Suppresses console output and returns formatted terminal output
  */
 export async function unifiedScan(
   session: WalletSession,
   apiKey: string,
   dustThresholdUsd: number = 5
-): Promise<{
-  result: TokenScanResult;
-  output: Array<{ type: string; content: string }>;
-}> {
-  // Create config
+): Promise<UnifiedScanResult> {
   const config: TokenScanConfig = {
     oneinchApiKey: apiKey,
     maxTokensToProcess: 1000,
@@ -29,23 +32,15 @@ export async function unifiedScan(
     defaultMinUsdValue: dustThresholdUsd
   };
 
-  // Create unified API implementation (same for both environments)
+  // Create unified API implementation
   const unifiedApi = {
-    getWalletBalances: async (chainId: number, address: string, apiKey: string) => {
-      return getWalletBalances(chainId, address, apiKey);
-    },
-    getTokenMetadata: async (chainId: number, apiKey: string) => {
-      return getTokenMetadata(chainId, apiKey);
-    },
-    getQuote: async (chainId: number, fromToken: string, toToken: string, amount: string, apiKey: string) => {
-      return getQuote(chainId, fromToken, toToken, amount, apiKey);
-    },
-    findUsdcAddress: async (chainId: number, apiKey: string, fetchFn: typeof fetch) => {
-      return findUsdcAddress(chainId, apiKey, fetchFn);
-    }
+    getWalletBalances: defaultApi.getWalletBalances,
+    getTokenMetadata: defaultApi.getTokenMetadata,
+    getQuote: defaultApi.getQuote,
+    findUsdcAddress: defaultApi.findUsdcAddress
   };
 
-  // Suppress ALL console output during scan
+  // Suppress console output during scan
   const originalConsole = {
     log: console.log,
     error: console.error,
@@ -53,17 +48,14 @@ export async function unifiedScan(
     info: console.info
   };
 
-  // Completely silent scan
-  console.log = () => {};
-  console.error = () => {};
-  console.warn = () => {};
-  console.info = () => {};
+  // Temporarily disable console suppression for debugging
+  // console.log = () => {};
+  // console.error = () => {};
+  // console.warn = () => {};
+  // console.info = () => {};
 
   try {
-    // Perform scan with no output
     const result = await scanTokens(session, config, dustThresholdUsd, unifiedApi);
-    
-    // Generate formatted output
     const output = generateTokenScanOutput(result);
     
     return { result, output };
@@ -77,27 +69,22 @@ export async function unifiedScan(
 }
 
 /**
- * UNIFIED MULTI-CHAIN SCANNER
- * Single function used by both CLI and web for multi-chain scanning
+ * Unified multi-chain scan with formatted output
+ * Orchestrates multi-chain scanning and provides formatted output for display
  */
 export async function scanMultichain(
   session: WalletSession,
   apiKey: string,
   dustThresholdUsd: number = 5
-): Promise<{
-  results: TokenScanResult[];
-  output: Array<{ type: string; content: string }>;
-}> {
+): Promise<MultiChainScanResult> {
   const results: TokenScanResult[] = [];
-  const output: Array<{ type: string; content: string }> = [];
+  const output: OutputItem[] = [];
   
-  // Add header
   output.push({
     type: 'info',
     content: '🌐 Starting multi-chain token scan...'
   });
   
-  // Scan each supported chain
   for (const chain of getSupportedChains()) {
     try {
       output.push({
@@ -105,19 +92,15 @@ export async function scanMultichain(
         content: `🔄 Scanning ${chain.name} (${chain.id})...`
       });
       
-      // Create session for this chain
       const chainSession: WalletSession = {
         ...session,
         chainId: chain.id
       };
       
-      // Use the unified single-chain scanner
       const { result } = await unifiedScan(chainSession, apiKey, dustThresholdUsd);
       
       if (result.allTokens.length > 0) {
         results.push(result);
-        
-        // Add chain summary to output
         const chainOutput = generateTokenScanOutput(result);
         output.push(...chainOutput);
       } else {
@@ -159,13 +142,13 @@ export async function scanMultichain(
 /**
  * CLI display function - converts output to console.log
  */
-export function displayForCLI(output: Array<{ type: string; content: string }>): void {
+export function displayForCLI(output: OutputItem[]): void {
   output.forEach(item => console.log(item.content));
 }
 
 /**
  * Web display function - returns output for terminal UI
  */
-export function displayForWeb(output: Array<{ type: string; content: string }>): Array<{ type: string; content: string }> {
+export function displayForWeb(output: OutputItem[]): OutputItem[] {
   return output;
 }

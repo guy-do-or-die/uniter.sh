@@ -1,6 +1,5 @@
-import { EnvironmentAdapter, TerminalEnvironment } from '../shared/engine.js';
-import { unifiedScan, scanMultichain } from '../shared/token-scanner.js';
-import { SUPPORTED_CHAINS } from '../shared/chains.js';
+import { EnvironmentAdapter, TerminalEnvironment } from '../shared/terminal/index.js';
+import { unifiedScan, scanMultichain } from '../shared/portfolio-display.js';
 import { loadBrowserConfig } from './config.js';
 import { 
   connectWallet, 
@@ -8,7 +7,6 @@ import {
   isWalletConnected, 
   getCurrentSession, 
   restoreSession,
-  config
 } from './wallet.js';
 
 // Debug environment variables
@@ -17,9 +15,6 @@ console.log('Environment variables loaded:', {
   WALLETCONNECT_PROJECT_ID: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ? '✅ Present' : '❌ Missing',
   ONEINCH_API_KEY: import.meta.env.VITE_ONEINCH_API_KEY ? '✅ Present' : '❌ Missing'
 });
-
-// Load browser config
-const browserConfig = loadBrowserConfig();
 
 /**
  * Web environment adapter - provides real wallet functionality via Wagmi

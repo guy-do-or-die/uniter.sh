@@ -1,204 +1,6 @@
-import { getChainId, getChainName, getSupportedChains } from './chains.js';
-
-export interface TerminalOutput {
-  type: 'text' | 'error' | 'success' | 'warning' | 'info' | 'table' | 'banner';
-  content: string;
-  data?: any;
-}
-
-// Import token types for display functions
-import type { TokenScanResult } from './scanner.js';
-
-export interface TerminalCommand {
-  name: string;
-  description: string;
-  aliases?: string[];
-  args?: string[];
-  handler: (args: string[]) => Promise<TerminalOutput[]>;
-}
-
-export interface TerminalEnvironment {
-  isNode: boolean;
-  isBrowser: boolean;
-  canConnectWallet: boolean;
-  canScanTokens: boolean;
-}
-
-/**
- * Environment adapter interface for platform-specific functionality
- */
-export interface EnvironmentAdapter {
-  // Wallet operations
-  connectWallet(): Promise<any>;
-  disconnectWallet(): Promise<void>;
-  isWalletConnected(): boolean;
-  getCurrentSession(): any;
-  restoreSession(): Promise<any>;
-  
-  // Token operations
-  scanTokens(session: any, chainId: number): Promise<any>;
-  scanTokensMultiChain(session: any): Promise<any>;
- 
-  // Environment info
-  getEnvironment(): TerminalEnvironment;
-}
-
-// ============================================================================
-// UNIFIED TOKEN DISPLAY FUNCTIONS
-// Moved from CLI token-display.ts to provide consistent formatting across environments
-// ============================================================================
-
-/**
- * Format token amount for display
- */
-export function formatTokenAmount(amount: number, maxDecimals: number = 4): string {
-  if (amount === 0) return '0';
-  
-  // For very small amounts, show more decimals
-  if (amount < 0.001) {
-    return amount.toExponential(2);
-  }
-  
-  // For amounts < 1, show up to 6 decimals
-  if (amount < 1) {
-    return amount.toFixed(Math.min(6, maxDecimals));
-  }
-  
-  // For larger amounts, use locale formatting
-  return amount.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: maxDecimals,
-  });
-}
-
-/**
- * Format USD value for display
- */
-export function formatUsdValue(value: number): string {
-  if (value === 0) return '$0.00';
-  
-  if (value < 0.01) {
-    return `$${value.toExponential(2)}`;
-  }
-  
-  return `$${value.toFixed(2)}`;
-}
-
-/**
- * Generate unified token scan display output for both CLI and web environments
- */
-export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOutput[] {
-  const output: TerminalOutput[] = [];
-  
-  if (!scanResult || !scanResult.tokens || scanResult.tokens.length === 0) {
-    output.push({
-      type: 'info',
-      content: '✅ Scan complete - No tokens with balances found'
-    });
-    return output;
-  }
-  
-  // Success message with count
-  output.push({
-    type: 'success',
-    content: `✅ Found ${scanResult.tokens.length} tokens with balances on ${scanResult.chainName}`
-  });
-  
-  // Portfolio summary
-  output.push({
-    type: 'info',
-    content: '\n============================================================'
-  });
-  output.push({
-    type: 'info',
-    content: '🪙 TOKEN PORTFOLIO SUMMARY'
-  });
-  output.push({
-    type: 'info',
-    content: '============================================================'
-  });
-  output.push({
-    type: 'info',
-    content: `💰 Total Value: ${formatUsdValue(scanResult.totalUSD)}`
-  });
-  output.push({
-    type: 'info',
-    content: `🔢 Total Tokens: ${scanResult.allTokens.length}`
-  });
-  output.push({
-    type: 'info',
-    content: `🧹 Dust Tokens: ${scanResult.dustTokens.length}`
-  });
-  output.push({
-    type: 'info',
-    content: '============================================================\n'
-  });
-  
-  // Display significant tokens
-  if (scanResult.significantTokens && scanResult.significantTokens.length > 0) {
-    output.push({
-      type: 'info',
-      content: '💎 SIGNIFICANT TOKENS:'
-    });
-    
-    scanResult.significantTokens.forEach((token: any, index: number) => {
-      const amount = formatTokenAmount(token.balanceNum || token.balanceFormatted);
-      const usdValue = formatUsdValue(token.balanceUSD || token.usdValue);
-      output.push({
-        type: 'info',
-        content: `${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
-      });
-    });
-  }
-  
-  // Display medium tokens
-  if (scanResult.mediumTokens && scanResult.mediumTokens.length > 0) {
-    output.push({
-      type: 'info',
-      content: '\n🔸 MEDIUM TOKENS:'
-    });
-    
-    scanResult.mediumTokens.forEach((token: any, index: number) => {
-      const amount = formatTokenAmount(token.balanceNum || token.balanceFormatted);
-      const usdValue = formatUsdValue(token.balanceUSD || token.usdValue);
-      output.push({
-        type: 'info',
-        content: `${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
-      });
-    });
-  }
-  
-  // Display dust tokens (sample)
-  if (scanResult.dustTokens && scanResult.dustTokens.length > 0) {
-    output.push({
-      type: 'info',
-      content: '\n🧹 DUST TOKENS (sample):'
-    });
-    
-    scanResult.dustTokens.slice(0, 5).forEach((token: any, index: number) => {
-      const amount = formatTokenAmount(token.balanceNum || token.balanceFormatted);
-      const usdValue = formatUsdValue(token.balanceUSD || token.usdValue);
-      output.push({
-        type: 'info',
-        content: `${index + 1}. ${token.symbol} - ${amount} (${usdValue})`
-      });
-    });
-    
-    if (scanResult.dustTokens.length > 5) {
-      output.push({
-        type: 'info',
-        content: `   ... and ${scanResult.dustTokens.length - 5} more dust tokens`
-      });
-    }
-  }
-  
-  output.push({
-    type: 'info',
-    content: '============================================================'
-  });
-  
-  return output;
-}
+import { getChainId, getChainName, getSupportedChains } from '../chains.js';
+import { generateTokenScanOutput } from './display.js';
+import type { TerminalOutput, TerminalCommand, EnvironmentAdapter } from './types.js';
 
 /**
  * Unified terminal engine that works in both CLI and web environments
@@ -376,10 +178,16 @@ export class UnifiedTerminalEngine {
     const envInfo = env.isBrowser ? 'Web Terminal' : 'CLI Terminal';
     const capabilities = env.canConnectWallet ? 'Full Functionality' : 'Demo Mode';
     
-    return [{
-      type: 'banner',
-      content: `Welcome to uniter.sh (${envInfo} - ${capabilities})\nType "help" to see available commands`
-    }];
+    return [
+      {
+        type: 'banner',
+        content: `Welcome to uniter.sh (${envInfo} - ${capabilities})`
+      },
+      {
+        type: 'info',
+        content: 'Type "help" to see available commands'
+      }
+    ];
   }
 
   /**
@@ -455,7 +263,10 @@ export class UnifiedTerminalEngine {
         content: 'Wallet connected successfully'
       }, {
         type: 'info',
-        content: `Address: ${session.address}\nChain: ${session.chainName || 'Unknown'} (${session.chainId || 'Unknown'})`
+        content: `Address: ${session.address}`
+      }, {
+        type: 'info',
+        content: `Chain: ${session.chainName || 'Unknown'} (${session.chainId || 'Unknown'})`
       }];
     } catch (error) {
       return [{
@@ -516,12 +327,18 @@ export class UnifiedTerminalEngine {
         content: 'Wallet connected'
       }, {
         type: 'info',
-        content: `Address: ${session?.address || 'Unknown'}\nChain: ${session?.chainName || 'Unknown'} (${session?.chainId || 'Unknown'})`
+        content: `Address: ${session?.address || 'Unknown'}`
+      }, {
+        type: 'info',
+        content: `Chain: ${session?.chainName || 'Unknown'} (${session?.chainId || 'Unknown'})`
       }];
     } else {
       return [{
         type: 'warning',
-        content: 'No wallet connected\nUse "connect" to connect your wallet'
+        content: 'No wallet connected'
+      }, {
+        type: 'warning',
+        content: 'Use "connect" to connect your wallet'
       }];
     }
   }
