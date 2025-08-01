@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "npm run build:web",
+  "buildCommand": "bun run build:web",
   "outputDirectory": "dist-web",
-  "devCommand": "npm run dev:web",
-  "installCommand": "npm install",
+  "devCommand": "bun run start:web",
+  "installCommand": "bun install",
   "framework": null,
   "rewrites": [
     {
