@@ -1,0 +1,11 @@
+# Netlify headers configuration for Farcaster miniapp
+
+# Ensure farcaster.json is served with correct content type
+/.well-known/farcaster.json
+  Content-Type: application/json
+  Cache-Control: public, max-age=300
+
+# CORS headers for API access
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff

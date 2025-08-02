@@ -1,2 +1,3 @@
-# Netlify redirects for Farcaster miniapp manifest
-/.well-known/farcaster.json /farcaster.json 200
+# Netlify configuration for Farcaster miniapp manifest
+# Ensure .well-known directory is served with correct MIME type
+/.well-known/farcaster.json /.well-known/farcaster.json 200!

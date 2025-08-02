@@ -6,6 +6,15 @@ import { miniapp } from './miniapp.js';
  */
 async function initWebTerminal(): Promise<void> {
   try {
+    // Check if we're in a Farcaster miniapp context
+    const url = new URL(window.location.href);
+    const isMiniappContext = url.searchParams.has('miniApp') || 
+                            url.pathname.includes('/miniapp') ||
+                            url.searchParams.has('fc_miniapp') ||
+                            window.location.href.includes('farcaster');
+    
+    console.log('Miniapp context detected:', isMiniappContext);
+    
     // Initialize Farcaster integration
     await miniapp.initialize();
     
