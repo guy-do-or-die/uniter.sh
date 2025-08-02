@@ -544,7 +544,10 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
 
       if (uri) {
         console.log('\nScan QR code with your wallet:\n');
+        // Invert colors for QR code display
+        process.stdout.write('\x1b[7m'); // ANSI reverse video (invert colors)
         qrcode.generate(uri, { small: true });
+        process.stdout.write('\x1b[27m'); // ANSI normal video (reset inversion)
         console.log('Waiting for wallet connection...');
         
         if (config.debug) {

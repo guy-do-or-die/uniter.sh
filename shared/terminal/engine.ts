@@ -189,6 +189,12 @@ export class UnifiedTerminalEngine {
         handler: this.handleHelp.bind(this)
       },
       {
+        name: 'about',
+        aliases: ['a'],
+        description: 'About uniter.sh',
+        handler: this.handleAbout.bind(this)
+      },
+      {
         name: 'connect',
         description: 'Connect wallet via WalletConnect',
         aliases: ['c'],
@@ -476,6 +482,45 @@ export class UnifiedTerminalEngine {
         content: '\nDemo Mode: Limited functionality in web environment.\nFor full wallet integration, use the CLI version.'
       });
     }
+
+    return output;
+  }
+
+  private async handleAbout(): Promise<TerminalOutput[]> {
+    const env = this.adapter.getEnvironment();
+    const output: TerminalOutput[] = [];
+
+    // Description
+    output.push({
+      type: 'text',
+      content: '\r\n\x1b[36mUnified DeFi Terminal\x1b[0m - Make tokens unitETH across all chains\r\n'
+    });
+
+    const uniterLink = `\x1b]8;;https://uniter.sh\x1b\\\x1b[4m\x1b[36muniter.sh\x1b[0m\x1b]8;;\x1b\\`;
+    const oneInchLink = `\x1b]8;;https://1inch.io\x1b\\\x1b[4m\x1b[36m1inch.io\x1b[0m\x1b]8;;\x1b\\`;
+    const githubLink = `\x1b]8;;https://github.com/guy-do-or-die/uniter.sh\x1b\\\x1b[4m\x1b[36mgithub.com/guy-do-or-die/uniter.sh\x1b[0m\x1b]8;;\x1b\\`;
+
+    output.push({
+      type: 'text',
+      content: `\r\nPowered by         ${oneInchLink} 🦄\r\n`
+    });
+
+    if (env.isBrowser) {
+      output.push({
+        type: 'text',
+        content: '\r\nTry CLI version    \x1b[33mnpm install -g uniter.sh\x1b[0m\r\n'
+      });
+    } else {
+      output.push({
+        type: 'text',
+        content: `\r\nTry web version    ${uniterLink}\r\n`
+      });
+    }
+
+    output.push({
+      type: 'text',
+      content: `\r\nThe code           ${githubLink}\r\n`
+    });
 
     return output;
   }

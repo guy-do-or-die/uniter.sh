@@ -97,6 +97,34 @@ export class WebTerminalRenderer implements TerminalRenderer {
       // Critical settings for block character rendering
       minimumContrastRatio: 1,
       overviewRulerWidth: 0,
+      // Custom link handler to open links properly without security warnings
+      linkHandler: {
+        activate: (event: MouseEvent, uri: string) => {
+          // Prevent the default terminal link behavior that causes security warnings
+          event.preventDefault();
+          event.stopPropagation();
+          
+          try {
+            // Open link in new tab/window using window.open instead of direct navigation
+            // This avoids the browser security warning dialog
+            const newWindow = window.open(uri, '_blank', 'noopener,noreferrer');
+            if (newWindow) {
+              newWindow.focus();
+              console.log('Terminal link opened in new tab:', uri);
+            } else {
+              // Fallback if popup blocked
+              console.log('Link blocked by popup blocker:', uri);
+              // Could show a user-friendly message here
+            }
+          } catch (error) {
+            console.error('Failed to open link:', uri, error);
+          }
+          
+          return false;
+        },
+        hover: () => {},
+        leave: () => {}
+      },
       // Force precise character positioning
       rescaleOverlappingGlyphs: true,
       customGlyphs: true,

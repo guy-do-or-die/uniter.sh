@@ -125,8 +125,7 @@ export function getChainId(chainInput: string): number {
   });
   
   if (!chain) {
-    const supportedNames = SUPPORTED_CHAINS.map(c => c.name.toLowerCase()).join(', ');
-    throw new Error(`Unsupported chain: ${chainInput}\r\nSupported: ${supportedNames}`);
+    throw new Error(`Unsupported chain: ${chainInput}\r\nUse 'chains' command to see supported chains`);
   }
   return chain.id;
 }

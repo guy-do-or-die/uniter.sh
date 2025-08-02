@@ -181,10 +181,15 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
     return output;
   }
   
-  // Portfolio summary header with colors
+  // Portfolio summary header with colors - generate dynamic width
+  const headerTargetWidth = isMiniappEnvironment() ? MINIAPP_MAX_WIDTH : DESKTOP_MAX_WIDTH;
+  const headerText = '=== PORTFOLIO SUMMARY ===';
+  const padding = Math.floor((headerTargetWidth - 25) / 2); // 25 is length of header text
+  const paddedHeader = '='.repeat(padding) + headerText + '='.repeat(padding);
+  
   output.push({
     type: 'info',
-    content: formatForEnvironment('\n\x1b[36m=== PORTFOLIO SUMMARY ===\x1b[0m')
+    content: `\n\x1b[36m${paddedHeader}\x1b[0m`
   });
   
   const totalValueFormatted = formatUsdValue(scanResult.totalUSD);
@@ -263,9 +268,12 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
     });
   }
   
+  // Generate divider with appropriate width for environment
+  const targetWidth = isMiniappEnvironment() ? MINIAPP_MAX_WIDTH : DESKTOP_MAX_WIDTH;
+  const divider = '='.repeat(targetWidth);
   output.push({
     type: 'info',
-    content: formatForEnvironment('\x1b[36m============================================================\x1b[0m')
+    content: `\x1b[36m${divider}\x1b[0m`
   });
   
   return output;
