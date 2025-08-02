@@ -41,16 +41,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Check if debug mode is enabled
+    const isDebug = true;//req.query.debug === 'true';
+    
     // Validate API key
     const apiKey = process.env.ONEINCH_API_KEY;
     if (!apiKey) {
       const availableKeys = Object.keys(process.env).filter(k => k.includes('ONEINCH'));
       console.error('❌ ONEINCH_API_KEY not found in Vercel API route');
       console.error('Available ONEINCH env vars:', availableKeys);
+      if (isDebug) {
+        console.warn('⚠️ API key missing - this will cause all 1inch requests to fail');
+      }
       return res.status(500).json({ error: 'API key not configured' });
     }
     
-    console.log(`✅ API key found in Vercel API route, length: ${apiKey.length}`);
+    if (isDebug) {
+      console.log(`✅ API key found in Vercel API route, length: ${apiKey.length}`);
+      if (apiKey.length < 32) {
+        console.warn('⚠️ API key seems unusually short, may be invalid');
+      }
+    }
 
     // Parse the path from the URL
     // URL will be like: /api/1inch/balance/v1.2/130/balances/0x...
@@ -59,6 +70,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pathMatch = fullPath.match(/^\/api\/1inch\/(.+)$/);
     
     if (!pathMatch) {
+      if (isDebug) {
+        console.warn(`⚠️ Invalid path format received: ${fullPath}`);
+      }
       return res.status(400).json({ 
         error: 'Invalid path format',
         expectedFormat: '/api/1inch/{1inch-api-path}',
@@ -67,7 +81,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const apiPath = pathMatch[1];
-    console.log(`🔗 Extracted API path: ${apiPath}`);
+    if (isDebug) {
+      console.log(`🔗 Extracted API path: ${apiPath}`);
+      
+      // Warn about potentially problematic paths
+      if (apiPath.includes('..') || apiPath.includes('//')) {
+        console.warn(`⚠️ Suspicious path detected: ${apiPath}`);
+      }
+      if (!apiPath.includes('/v1.')) {
+        console.warn(`⚠️ Path doesn't contain version info, may be invalid: ${apiPath}`);
+      }
+    }
 
     // Build proxy request
     const proxyRequest: ProxyRequest = {
@@ -78,9 +102,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // Use proxy utilities
+    if (isDebug) {
+      console.log(`📡 Making 1inch API request: ${req.method} ${apiPath}`);
+    }
     const proxyResponse = await proxyToOneInch(proxyRequest, apiKey, {
-      logPrefix: '🚀 Vercel'
+      logPrefix: isDebug ? '🚀 Vercel' : undefined
     });
+    
+    // Warn about non-200 responses
+    if (isDebug) {
+      if (proxyResponse.status !== 200) {
+        console.warn(`⚠️ 1inch API returned non-200 status: ${proxyResponse.status} for ${apiPath}`);
+      }
+      if (proxyResponse.data.length === 0) {
+        console.warn(`⚠️ 1inch API returned empty response for ${apiPath}`);
+      }
+    }
 
     // Set response headers with debug info
     res.status(proxyResponse.status);
@@ -95,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const jsonData = JSON.parse(proxyResponse.data);
       
       // Add debug information for ALL endpoints when debug=true
-      if (req.query.debug === 'true') {
+      if (isDebug) {
         const debugInfo = {
           _debug: {
             originalPath: apiPath,
@@ -114,6 +151,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } catch (parseError) {
       // Return parse error info in response
+      if (isDebug) {
+        console.warn(`⚠️ Failed to parse JSON response from 1inch API for ${apiPath}`);
+        console.warn(`⚠️ Parse error: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
+        console.warn(`⚠️ Raw data preview: ${proxyResponse.data.substring(0, 200)}`);
+      }
       res.status(500).json({
         error: 'JSON parse failed',
         parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
