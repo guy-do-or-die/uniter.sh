@@ -126,6 +126,9 @@ export class WebTerminalRenderer implements TerminalRenderer {
   
     // Auto-focus the terminal for immediate input
     this.terminal.focus();
+    
+    // Setup horizontal scroll detection to hide/show vertical scrollbar
+    this.setupScrollbarVisibilityControl(terminalElement);
   
     // Also focus when user clicks anywhere on the terminal
     terminalElement.addEventListener('click', () => {
@@ -373,6 +376,24 @@ export class WebTerminalRenderer implements TerminalRenderer {
       this.networkIds = ['arbitrum', 'avalanche', 'base', 'bnb', 'gnosis', 'linea', 'ethereum', 'optimism', 'polygon', 'sonic', 'unichain', 'zksync'];
       this.chainNames = ['arbitrum one', 'avalanche', 'base', 'bnb smart chain', 'gnosis', 'linea mainnet', 'ethereum', 'op mainnet', 'polygon', 'sonic', 'unichain', 'zksync era'];
     }
+  }
+
+  /**
+   * Setup scrollbar visibility control to hide vertical scrollbar during horizontal scrolling
+   */
+  private setupScrollbarVisibilityControl(terminalElement: HTMLElement): void {
+    terminalElement.addEventListener('scroll', () => {
+      const xtermViewport = terminalElement.querySelector('.xterm-viewport') as HTMLElement;
+      if (!xtermViewport) return;
+      
+      // Hide vertical scrollbar when scrolling horizontally
+      if (terminalElement.scrollLeft > 0) {
+        xtermViewport.style.setProperty('overflow-y', 'hidden', 'important');
+      } else {
+        // Show vertical scrollbar immediately when back at left edge
+        xtermViewport.style.setProperty('overflow-y', 'auto', 'important');
+      }
+    });
   }
 
   /**

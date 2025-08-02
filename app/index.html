@@ -44,7 +44,7 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        padding: 0 20px 20px 20px; /* Add padding to container instead */
+        padding: 20px; /* Symmetric padding for balanced scrollbar positioning */
         box-sizing: border-box;
       }
       
@@ -156,9 +156,33 @@
         flex: 1;
         background: #0d1117;
         padding: 0;
-        overflow: hidden; /* Let xterm handle scrolling */
+        overflow: auto; /* Allow both scrollbars */
         position: relative;
         min-height: 0; /* Allow flex shrinking */
+        scrollbar-width: thin;
+        scrollbar-color: #58a6ff #161b22;
+      }
+      
+      /* Style terminal container horizontal scrollbar */
+      #terminal::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      
+      #terminal::-webkit-scrollbar-track {
+        background: #161b22;
+        border-radius: 3px;
+      }
+      
+      #terminal::-webkit-scrollbar-thumb {
+        background: #58a6ff;
+        border-radius: 3px;
+        opacity: 0.8;
+      }
+      
+      #terminal::-webkit-scrollbar-thumb:hover {
+        background: #79c0ff;
+        opacity: 1;
       }
       
       /* Fix xterm.js scrolling - let xterm handle all scrolling */
@@ -204,33 +228,42 @@
         }
       }
       
+
+      
+      /* xterm viewport scrollbars - vertical only */
       .xterm-viewport {
+        overflow-x: hidden !important;
         overflow-y: auto !important;
-        overflow-x: auto !important;
         scrollbar-width: thin;
         scrollbar-color: #58a6ff #161b22;
       }
       
-      /* Custom scrollbar styling */
       .xterm-viewport::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       
       .xterm-viewport::-webkit-scrollbar-track {
         background: #161b22;
-        border-radius: 4px;
+        border-radius: 3px;
       }
       
       .xterm-viewport::-webkit-scrollbar-thumb {
         background: #58a6ff;
-        border-radius: 4px;
-        opacity: 0.7;
+        border-radius: 3px;
+        opacity: 0.8;
       }
       
       .xterm-viewport::-webkit-scrollbar-thumb:hover {
         background: #79c0ff;
         opacity: 1;
+      }
+      
+
+      
+      /* Ensure content doesn't wrap */
+      .xterm-screen {
+        white-space: nowrap !important;
       }
       
       /* Mobile optimizations */
@@ -242,13 +275,15 @@
         
         /* Thinner scrollbars on mobile */
         .xterm-viewport::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
+          width: 4px;
+          height: 4px;
         }
         
-        /* Ensure content doesn't wrap but fits properly */
+        /* Ensure content doesn't wrap and scroll area fits content */
         .xterm-screen {
           white-space: nowrap !important;
+          display: inline-block;
+          min-width: fit-content;
         }
       }
       
