@@ -1,5 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { proxyToOneInch, type ProxyRequest } from '../proxy';
 
+/**
+ * Vercel API route for 1inch proxy
+ * Handles both development and production requests
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,14 +18,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Get the API key from environment variables
+    // Validate API key
     const apiKey = process.env.ONEINCH_API_KEY;
     if (!apiKey) {
-      console.error('❌ ONEINCH_API_KEY not found in environment variables');
-      console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('ONEINCH')));
+      const availableKeys = Object.keys(process.env).filter(k => k.includes('ONEINCH'));
+      console.error('❌ ONEINCH_API_KEY not found in Vercel API route');
+      console.error('Available ONEINCH env vars:', availableKeys);
       return res.status(500).json({ error: 'API key not configured' });
     }
-    console.error('✅ API key found, length:', apiKey.length);
+    
+    console.log(`✅ API key found in Vercel API route, length: ${apiKey.length}`);
 
     // Extract the path from the request
     const { path } = req.query;
@@ -28,80 +35,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid path' });
     }
 
-    // Reconstruct the API path
-    const apiPath = path.join('/');
-    
-    // Build the full 1inch API URL
-    const apiUrl = `https://api.1inch.dev/${apiPath}`;
-    
-    // Add query parameters if they exist
-    const url = new URL(apiUrl);
-    Object.entries(req.query).forEach(([key, value]) => {
-      if (key !== 'path' && value) {
-        url.searchParams.append(key, Array.isArray(value) ? value[0] : value);
-      }
+    // Build proxy request
+    const proxyRequest: ProxyRequest = {
+      url: `/api/1inch/${path.join('/')}`,
+      method: req.method || 'GET',
+      body: req.body,
+      query: Object.fromEntries(
+        Object.entries(req.query).filter(([key]) => key !== 'path')
+      )
+    };
+
+    // Use proxy utilities
+    const proxyResponse = await proxyToOneInch(proxyRequest, apiKey, {
+      logPrefix: '🚀 Vercel'
     });
 
-    console.error(`🔗 Proxying request to: ${url.toString()}`);
-    console.error(`📋 Request method: ${req.method}`);
-    console.error(`🔑 Using API key: ${apiKey.substring(0, 8)}...`);
+    // Set response headers
+    res.status(proxyResponse.status);
+    res.setHeader('Content-Type', proxyResponse.headers['content-type'] || 'application/json');
 
-    // Make the request to 1inch API with proper headers
-    const response = await fetch(url.toString(), {
-      method: req.method,
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
-    });
-
-    console.error(`📡 1inch API response: ${response.status} ${response.statusText}`);
-    
-    // Log response headers for debugging
-    const responseHeaders = Object.fromEntries(response.headers.entries());
-    console.error(`📋 Response headers:`, responseHeaders);
-
-    // Forward the response
-    const data = await response.text();
-    console.error(`📄 Response data (first 200 chars):`, data.substring(0, 200));
-    
-    // If it's an error response, log the full response for debugging
-    if (!response.ok) {
-      console.error(`❌ 1inch API error response:`, data);
-      
-      // Also return debug info in the response for 400 errors
-      if (response.status === 400) {
-        return res.status(400).json({
-          error: '1inch API Bad Request',
-          details: data,
-          debugInfo: {
-            url: url.toString(),
-            method: req.method,
-            status: response.status,
-            statusText: response.statusText,
-            headers: responseHeaders
-          }
-        });
-      }
-    }
-    
-    // Set the same status code and headers
-    res.status(response.status);
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
-    
     // Try to parse as JSON, fallback to text
     try {
-      const jsonData = JSON.parse(data);
+      const jsonData = JSON.parse(proxyResponse.data);
       res.json(jsonData);
     } catch (parseError) {
       console.error('❌ Failed to parse response as JSON:', parseError);
-      res.send(data);
+      res.send(proxyResponse.data);
     }
 
   } catch (error) {
-    console.error('Proxy error:', error);
+    console.error('Vercel proxy error:', error);
     res.status(500).json({ 
       error: 'Proxy request failed',
       details: error instanceof Error ? error.message : 'Unknown error'

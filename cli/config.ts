@@ -1,37 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-
-// Enhanced config interface with advanced filtering options
-interface UniterConfig {
-  defaultChain?: string;
-  defaultMinUsdValue?: number;
-  minUSDValue?: number; // Minimum USD value for token filtering
-  maxSlippage?: number;
-  oneinchApiKey?: string;
-  walletConnectProjectId?: string;
-  debug?: boolean; // Enable verbose debug output
-  // Advanced filtering options
-  minTokenBalance?: number; // Minimum token count to consider (e.g., ignore tokens with < 0.001 balance)
-  dustThresholdUsd?: number; // Alternative dust threshold
-  excludeTokens?: string[]; // Token addresses to exclude from scanning
-  includeZeroBalance?: boolean; // Whether to include zero balance tokens
-  maxTokensToProcess?: number; // Limit number of tokens to process
-}
-
-// Default configuration
-const DEFAULT_CONFIG = {
-  defaultChain: 'base' as string,
-  defaultMinUsdValue: 1 as number,
-  maxSlippage: 1 as number,
-  debug: false as boolean, // Disable verbose debug output by default
-  // Advanced filtering defaults
-  minTokenBalance: 0.001 as number, // Ignore tokens with very small balances
-  dustThresholdUsd: 5 as number, // More aggressive dust threshold
-  excludeTokens: [] as string[], // No excluded tokens by default
-  includeZeroBalance: false as boolean, // Skip zero balance tokens
-  maxTokensToProcess: 100 as number, // Limit to top 100 tokens
-};
+import { UniterConfig, DEFAULT_CONFIG } from '../core/config.js';
 
 const CONFIG_FILE = join(homedir(), '.uniterrc');
 
@@ -109,7 +79,7 @@ export function validateConfig(config: UniterConfig): { valid: boolean; missing:
 }
 
 /**
- * Get configuration file path
+ * Get the path to the configuration file
  */
 export function getConfigPath(): string {
   return CONFIG_FILE;

@@ -30,7 +30,8 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 
-# Config files (keep example)
+# Config files
 .uniterrc
 
 local/
+.vercel

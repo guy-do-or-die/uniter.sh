@@ -2,14 +2,9 @@
   "version": 2,
   "buildCommand": "bun run build:web",
   "outputDirectory": "dist-web",
-  "devCommand": "bun run start:web",
   "installCommand": "bun install",
   "framework": null,
   "rewrites": [
-    {
-      "source": "/api/1inch/(.*)",
-      "destination": "/api/1inch/[...path]"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

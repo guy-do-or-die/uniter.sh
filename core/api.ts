@@ -11,9 +11,35 @@ import { mainnet } from 'viem/chains';
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
 
-// Vite dev proxy endpoint for browser environments
-const VITE_PROXY_BASE = '/api/1inch';
-const ONEINCH_BASE_URL = 'https://api.1inch.dev';
+// API configuration - will be set by config
+let VITE_PROXY_BASE = '/api/1inch';
+let ONEINCH_BASE_URL = 'https://api.1inch.dev';
+let MIN_REQUEST_INTERVAL = 1000; // Default 1000ms between requests
+let MAX_API_RETRIES = 5; // Default 3 retries
+
+/**
+ * Configure API settings - should be called by each environment with their config
+ */
+export function configureApi(config: { 
+  oneinchBaseUrl?: string; 
+  proxyBaseUrl?: string;
+  apiRequestInterval?: number;
+  maxApiRetries?: number;
+}) {
+  if (config.oneinchBaseUrl) {
+    ONEINCH_BASE_URL = config.oneinchBaseUrl;
+  }
+  if (config.proxyBaseUrl) {
+    VITE_PROXY_BASE = config.proxyBaseUrl;
+  }
+  if (config.apiRequestInterval) {
+    MIN_REQUEST_INTERVAL = config.apiRequestInterval;
+  }
+  if (config.maxApiRetries) {
+    MAX_API_RETRIES = config.maxApiRetries;
+  }
+  console.log(`🔧 DEBUG: API configured - Proxy: ${VITE_PROXY_BASE}, Direct: ${ONEINCH_BASE_URL}, Interval: ${MIN_REQUEST_INTERVAL}ms, Retries: ${MAX_API_RETRIES}`);
+}
 
 // Debug environment detection
 console.log(`🌍 DEBUG: Environment detection - isBrowser: ${isBrowser}, isNode: ${isNode}`);
@@ -107,17 +133,97 @@ export interface OneInchSearchResponse {
 
 export type OneInchSearchResults = OneInchSearchResponse[];
 
-// Rate limiting for 1inch API to prevent 429 errors
-let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 100; // 100ms between requests
+// Global request queue for 1inch API to prevent 429 errors
+let requestQueue: Promise<any> = Promise.resolve();
 
-async function delayIfNeeded() {
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await new Promise(resolve => globalThis.setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
+/**
+ * Unified umbrella function for all 1inch API requests
+ * Handles rate limiting, retries, error handling, and debug logging consistently
+ */
+async function makeOneInchRequest<T>(
+  endpoint: string,
+  apiKey: string,
+  options: {
+    retryCount?: number;
+    maxRetries?: number;
+    description?: string;
+  } = {}
+): Promise<T> {
+  const { retryCount = 0, maxRetries = MAX_API_RETRIES, description = 'API request' } = options;
+  
+  if (!apiKey && isNode) {
+    throw new Error('1inch API key not provided');
   }
-  lastRequestTime = Date.now();
+
+  return queueRequest(async () => {
+    const url = getApiUrl(endpoint);
+    
+    try {
+      // Build headers conditionally - Vite proxy handles auth in browser
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+      };
+      
+      if (isNode && apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+      
+      const response = await fetch(url, { headers });
+
+      console.log(`🔍 DEBUG: ${description}:`, {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          // 400 errors are permanent - don't retry
+          console.error(`⚠️  ${description} failed: ${response.status} (likely insufficient liquidity or unsupported token)`);
+          const errorText = await response.text();
+          console.error(`🔍 DEBUG: Error response body:`, errorText);
+          throw new Error(`1inch API 400 error: ${response.statusText}`);
+        } else if (response.status === 429 && retryCount < maxRetries) {
+          // Retry with exponential backoff for rate limits
+          const backoffDelay = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s
+          console.error(`⏱️  Rate limited for ${description} - retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          return makeOneInchRequest<T>(endpoint, apiKey, { ...options, retryCount: retryCount + 1 });
+        } else {
+          console.error(`🔍 DEBUG: ${description} error: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          console.error(`🔍 DEBUG: Error response body:`, errorText);
+          throw new Error(`1inch API error: ${response.status} ${response.statusText}`);
+        }
+      }
+
+      const result = await response.json();
+      console.log(`✅ DEBUG: ${description} successful:`, {
+        hasData: !!result,
+        dataKeys: result && typeof result === 'object' ? Object.keys(result) : 'N/A'
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('1inch API')) {
+        // Re-throw API errors as-is
+        throw error;
+      }
+      // Handle network errors
+      console.error(`🔍 DEBUG: Network error for ${description}:`, error);
+      throw new Error(`Network error: ${error}`);
+    }
+  });
+}
+
+async function queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+  const currentRequest = requestQueue.then(async () => {
+    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL));
+    return requestFn();
+  });
+  
+  requestQueue = currentRequest.catch(() => {});
+  return currentRequest;
 }
 
 /**
@@ -145,33 +251,11 @@ export async function findUsdcAddress(
   console.log(`🔍 DEBUG: No cache found, searching for USDC on chain ${chainId}...`);
 
   try {
-    // Rate limiting to prevent 429 errors
-    await delayIfNeeded();
-    
-    const url = getApiUrl(`/token/v1.3/${chainId}/search?query=USDC`);
-    console.log(`🔍 DEBUG: Making USDC search request to: ${url}`);
-    console.log(`🔍 DEBUG: Using API key: ${apiKey ? 'Present' : 'Missing'}`);
-    
-    const headers: Record<string, string> = {
-      'accept': 'application/json',
-    };
-    
-    if (isNode && apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
-    
-    const response = await fetch(url, {
-      headers,
-    });
-    
-    console.log(`🔍 DEBUG: USDC search response status: ${response.status} ${response.statusText}`);
-
-    if (!response.ok) {
-      console.warn(`Failed to search for USDC on chain ${chainId}: ${response.status}`);
-      return null;
-    }
-
-    const data: OneInchSearchResults = await response.json();
+    const data: OneInchSearchResults = await makeOneInchRequest<OneInchSearchResults>(
+      `/token/v1.3/${chainId}/search?query=USDC`,
+      apiKey,
+      { description: `USDC search on chain ${chainId}` }
+    );
     console.log(`🔍 DEBUG: USDC search response for chain ${chainId}: Found ${data.length} tokens`);
     
     // Find the most likely USDC token (exact symbol match, 6 decimals, valid address)
@@ -217,31 +301,11 @@ export async function getWalletBalances(
   walletAddress: string,
   apiKey: string
 ): Promise<OneInchBalanceResponse> {
-  if (!apiKey && isNode) {
-    throw new Error('1inch API key not provided');
-  }
-
-  // Rate limiting to prevent 429 errors
-  await delayIfNeeded();
-  
-  const url = getApiUrl(`/balance/v1.2/${chainId}/balances/${walletAddress}`);
-  
-  // Build headers conditionally - Vite proxy handles auth in browser
-  const headers: Record<string, string> = {
-    'Accept': 'application/json',
-  };
-  
-  if (isNode && apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
-  
-  const response = await fetch(url, { headers });
-
-  if (!response.ok) {
-    throw new Error(`1inch Balance API error: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
+  return makeOneInchRequest<OneInchBalanceResponse>(
+    `/balance/v1.2/${chainId}/balances/${walletAddress}`,
+    apiKey,
+    { description: `Wallet balances for ${walletAddress} on chain ${chainId}` }
+  );
 }
 
 /**
@@ -253,36 +317,11 @@ export async function getTokenMetadata(
   chainId: number,
   apiKey: string
 ): Promise<OneInchTokenMetadata> {
-  if (!apiKey && isNode) {
-    throw new Error('1inch API key not provided');
-  }
-
-  // Rate limiting to prevent 429 errors
-  await delayIfNeeded();
-  
-  const url = getApiUrl(`/token/v1.2/${chainId}`);
-  console.log(`🔍 DEBUG: Fetching metadata for chain ${chainId}`);
-  console.log(`🔍 DEBUG: Using URL: ${url}`);
-
-  // Build headers conditionally - Vite proxy handles auth in browser
-  const headers: Record<string, string> = {
-    'Accept': 'application/json',
-  };
-  
-  if (isNode && apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
-  
-  const response = await fetch(url, { headers });
-
-  console.log(`🔍 DEBUG: Response status: ${response.status}`);
-  console.log(`🔍 DEBUG: Response headers:`, Object.fromEntries(response.headers.entries()));
-
-  if (!response.ok) {
-    throw new Error(`1inch Token API error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  const data = await makeOneInchRequest<any>(
+    `/token/v1.2/${chainId}`,
+    apiKey,
+    { description: `Token metadata for chain ${chainId}` }
+  );
   console.log(`🔍 DEBUG: Raw metadata response type:`, typeof data);
   console.log(`🔍 DEBUG: Raw metadata response structure:`, Array.isArray(data) ? `Array[${data.length}]` : `Object with keys: ${Object.keys(data).slice(0, 5)}`);
   
@@ -432,53 +471,27 @@ export async function getQuote(
   amount: string,
   apiKey: string
 ): Promise<OneInchQuoteResponse | null> {
-  if (!apiKey && isNode) {
-    throw new Error('1inch API key not provided');
-  }
-
-  // Rate limiting to prevent 429 errors
-  await delayIfNeeded();
-
-  // Use v6.0 API with src/dst parameters (working CLI logic)
-  const url = getApiUrl(`/swap/v6.0/${chainId}/quote?src=${fromTokenAddress}&dst=${toTokenAddress}&amount=${amount}`);
-  
   try {
-    // Build headers conditionally - Vite proxy handles auth in browser
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
+    const result = await makeOneInchRequest<OneInchQuoteResponse>(
+      `/swap/v6.0/${chainId}/quote?src=${fromTokenAddress}&dst=${toTokenAddress}&amount=${amount}`,
+      apiKey,
+      { description: `Quote for ${fromTokenAddress} on chain ${chainId}` }
+    );
     
-    if (isNode && apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
-    
-    const response = await fetch(url, { headers });
-
-    console.log(`🔍 DEBUG: Quote request for ${fromTokenAddress}:`, {
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries())
-    });
-
-    if (!response.ok) {
-      // Graceful failure like CLI - return null instead of throwing
-      console.log(`🔍 DEBUG: 1inch API error for ${fromTokenAddress}: ${response.status} ${response.statusText}`);
-      const errorText = await response.text();
-      console.log(`🔍 DEBUG: Error response body:`, errorText);
-      return null;
-    }
-
-    const result = await response.json();
+    // Log specific quote details
     console.log(`🔍 DEBUG: Quote response for ${fromTokenAddress}:`, {
       dstAmount: result.dstAmount,
       srcAmount: result.srcAmount,
       hasProtocols: !!result.protocols
     });
+    
     return result;
   } catch (error) {
-    // Graceful failure like CLI - return null instead of throwing
-    console.log(`🔍 DEBUG: Network error for ${fromTokenAddress}:`, error);
+    // Graceful failure for quote requests - return null instead of throwing
+    // This allows the scanning to continue even if some tokens can't be quoted
+    if (error instanceof Error && error.message.includes('400')) {
+      console.error(`⚠️  Token quote not available for ${fromTokenAddress} on chain ${chainId}`);
+    }
     return null;
   }
 }
