@@ -173,10 +173,29 @@ export class WebTerminalRenderer implements TerminalRenderer {
     // Setup horizontal scrollbar auto-hide
     this.setupHorizontalScrollbarAutoHide(terminalElement);
   
-    // Also focus when user clicks anywhere on the terminal
-    terminalElement.addEventListener('click', () => {
+    // Enhanced focus handling for mobile devices
+    const focusTerminal = () => {
       this.terminal.focus();
+      // Force focus on mobile by triggering textarea focus
+      const textarea = terminalElement.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+      }
+    };
+    
+    // Focus on click/touch with mobile support
+    terminalElement.addEventListener('click', focusTerminal);
+    terminalElement.addEventListener('touchstart', focusTerminal);
+    
+    // Ensure terminal stays focused on mobile
+    document.addEventListener('touchend', (e) => {
+      // If touch ended on terminal, refocus it
+      if (terminalElement.contains(e.target as Node)) {
+        setTimeout(focusTerminal, 100); // Small delay for mobile keyboards
+      }
     });
+    
+
     
     // Ensure F5 and other browser keys work at document level
     document.addEventListener('keydown', (event) => {
@@ -270,7 +289,17 @@ export class WebTerminalRenderer implements TerminalRenderer {
       
       const printable = !domEvent.altKey && !domEvent.ctrlKey && !domEvent.metaKey;
       
-      if (domEvent.code === 'Enter') {
+      // Enhanced Enter key detection for mobile virtual keyboards
+      // Mobile keyboards may not set domEvent.code consistently
+      const isEnterKey = domEvent.code === 'Enter' || 
+                        domEvent.key === 'Enter' || 
+                        domEvent.keyCode === 13 || 
+                        domEvent.which === 13 ||
+                        key === '\r' || 
+                        key === '\n';
+      
+      if (isEnterKey) {
+        domEvent.preventDefault(); // Prevent default mobile keyboard behavior
         this.handleEnter();
       } else if (domEvent.code === 'Backspace') {
         this.handleBackspace();

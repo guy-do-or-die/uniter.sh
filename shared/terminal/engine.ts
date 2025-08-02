@@ -366,7 +366,7 @@ export class UnifiedTerminalEngine {
       DELIMITER,
       {
         type: 'info',
-        content: `\x1b[1m\x1b[96m  ${uniterLink} ${envInfo} — Make tokens unitETH with ${oneInchLink}!\x1b[0m`
+        content: `\x1b[96m  ${uniterLink} ${envInfo} — Make tokens unit\x1b[1m\x1b[97mETH\x1b[0m\x1b[96m with ${oneInchLink}!\x1b[0m`
       },
       {
         type: 'info',
