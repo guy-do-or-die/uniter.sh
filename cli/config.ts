@@ -10,6 +10,7 @@ interface UniterConfig {
   maxSlippage?: number;
   oneinchApiKey?: string;
   walletConnectProjectId?: string;
+  debug?: boolean; // Enable verbose debug output
   // Advanced filtering options
   minTokenBalance?: number; // Minimum token count to consider (e.g., ignore tokens with < 0.001 balance)
   dustThresholdUsd?: number; // Alternative dust threshold
@@ -23,6 +24,7 @@ const DEFAULT_CONFIG = {
   defaultChain: 'base' as string,
   defaultMinUsdValue: 1 as number,
   maxSlippage: 1 as number,
+  debug: false as boolean, // Disable verbose debug output by default
   // Advanced filtering defaults
   minTokenBalance: 0.001 as number, // Ignore tokens with very small balances
   dustThresholdUsd: 5 as number, // More aggressive dust threshold
@@ -54,13 +56,16 @@ export function loadConfig(): UniterConfig {
     ...DEFAULT_CONFIG,
     ...fileConfig,
     // Environment variables take precedence
-    ...(process.env.VITE_ONEINCH_API_KEY && { oneinchApiKey: process.env.VITE_ONEINCH_API_KEY }),
-    // Support both old WALLETCONNECT_PROJECT_ID and new REOWN_PROJECT_ID
-    ...((process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID) && { 
-      walletConnectProjectId: process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID 
+    ...((process.env.VITE_ONEINCH_API_KEY || process.env.ONEINCH_API_KEY) && { 
+      oneinchApiKey: process.env.VITE_ONEINCH_API_KEY || process.env.ONEINCH_API_KEY 
+    }),
+    // Support both old WALLETCONNECT_PROJECT_ID and new REOWN_PROJECT_ID (with and without VITE_ prefix)
+    ...((process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID || process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID) && { 
+      walletConnectProjectId: process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID || process.env.REOWN_PROJECT_ID || process.env.WALLETCONNECT_PROJECT_ID
     }),
     ...(process.env.DEFAULT_CHAIN && { defaultChain: process.env.DEFAULT_CHAIN }),
     ...(process.env.DEFAULT_MIN_USD_VALUE && { defaultMinUsdValue: parseFloat(process.env.DEFAULT_MIN_USD_VALUE) }),
+    ...(process.env.DEBUG === 'true' && { debug: true }),
   };
   
   return config;

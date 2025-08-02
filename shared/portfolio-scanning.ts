@@ -11,6 +11,7 @@ import {
   categorizeTokens, 
   calculatePortfolioStats 
 } from './token-processing.js';
+import { formatUsdValue } from './terminal/display.js';
 import type {
   WalletSession,
   TokenScanConfig,
@@ -18,6 +19,7 @@ import type {
   ApiImplementation,
   ScanProgress
 } from './types.js';
+import { DELIMITER } from './terminal/engine.js';
 
 /**
  * Core token scanning function - platform agnostic
@@ -44,7 +46,10 @@ export async function scanTokens(
       phase: 'starting',
       chainName: chainInfo.name,
       chainId: session.chainId,
-      message: `Starting scan on ${chainInfo.name} (Chain ID: ${session.chainId})`
+      message: `
+        \r${DELIMITER.content}
+        \rStarting scan on ${chainInfo.name} (Chain ID: ${session.chainId})
+      `
     });
     
     console.log(`Scanning ${chainInfo.name} for token balances...`);
@@ -154,7 +159,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       totalTokens: filteredTokens.length,
-      message: `Scan complete: $${totalUSD.toFixed(2)} across ${filteredTokens.length} tokens (${significantTokens.length} significant, ${mediumTokens.length} medium, ${dustTokens.length} dust)`
+      message: `Scan complete: ${formatUsdValue(totalUSD)} across ${filteredTokens.length} tokens (${significantTokens.length} significant, ${mediumTokens.length} medium, ${dustTokens.length} dust)`
     });
 
     // Return scan results

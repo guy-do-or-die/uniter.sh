@@ -30,7 +30,13 @@ async function main() {
   });
 
   // Try to restore previous session
-  await restoreSession();
+  console.log(chalk.yellow('🔄 Attempting to restore previous session...'));
+  const restoredSession = await restoreSession();
+  if (restoredSession) {
+    console.log(chalk.green(`✅ Session restored: ${restoredSession.address} on chain ${restoredSession.chainId}`));
+  } else {
+    console.log(chalk.gray('ℹ️ No previous session found or session invalid'));
+  }
 
   // Start the terminal
   await renderer.start();

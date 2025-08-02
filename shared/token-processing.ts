@@ -4,6 +4,7 @@
  */
 
 import { formatUnits, parseUnits } from 'viem';
+import { formatUsdValue } from './terminal/display.js';
 import { OneInchBalanceResponse, OneInchTokenMetadata, NATIVE_TOKEN_ADDRESS } from './api.js';
 import type { 
   TokenBalance, 
@@ -94,6 +95,7 @@ async function calculateTokenUsdValue(
     const quote = await api.getQuote(chainId, tokenAddress, usdcAddress, quoteAmount, apiKey);
     
     if (!quote || !quote.dstAmount) {
+      console.warn(`No quote received for token ${tokenAddress} on chain ${chainId}`);
       return 0;
     }
     
@@ -103,8 +105,24 @@ async function calculateTokenUsdValue(
     
     // Calculate total USD value
     const tokenBalanceNum = parseFloat(formatUnits(BigInt(tokenBalance), tokenDecimals));
-    return tokenBalanceNum * usdValuePerToken;
+    const totalUsdValue = tokenBalanceNum * usdValuePerToken;
+    
+    // Debug logging for high-value tokens
+    if (totalUsdValue > 1000) {
+      console.log(`🔍 DEBUG: High-value token calculation:`);
+      console.log(`  Token: ${tokenAddress}`);
+      console.log(`  Balance: ${tokenBalance} (${tokenBalanceNum} tokens)`);
+      console.log(`  Decimals: ${tokenDecimals}`);
+      console.log(`  Quote amount: ${quoteAmount} wei (${quoteAmountNum} tokens)`);
+      console.log(`  USDC address: ${usdcAddress}`);
+      console.log(`  Quote result: ${quote.dstAmount} USDC wei`);
+      console.log(`  USD per token: $${usdValuePerToken}`);
+      console.log(`  Total USD value: $${totalUsdValue}`);
+    }
+    
+    return totalUsdValue;
   } catch (error) {
+    console.error(`Error calculating USD value for token ${tokenAddress}:`, error);
     return 0;
   }
 }
@@ -166,13 +184,14 @@ export async function processTokenBalances(
         balanceUSD
       });
       
-      // Report completion for current token with value
+      // Report completion for current token with detailed info
+      const pricePerToken = balanceNum > 0 ? balanceUSD / balanceNum : 0;
       onProgress?.({
         phase: 'pricing',
         currentToken: metadata.symbol,
         tokenIndex: i + 1,
         totalTokens,
-        message: `${metadata.symbol}: $${balanceUSD.toFixed(2)} (${i + 1}/${totalTokens})`
+        message: `${metadata.symbol}: ${balanceFormatted} × ${formatUsdValue(pricePerToken)} = ${formatUsdValue(balanceUSD)} (${i + 1}/${totalTokens})`
       });
       
     } catch (error) {

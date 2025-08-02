@@ -4,7 +4,7 @@
  */
 
 import { getSupportedChains } from './chains.js';
-import { generateTokenScanOutput } from './terminal/display.js';
+import { formatUsdValue, generateTokenScanOutput } from './terminal/display.js';
 import { scanTokens } from './portfolio-scanning.js';
 import * as defaultApi from './api.js';
 import type {
@@ -134,7 +134,7 @@ export async function scanMultichain(
     output.push(
       { type: 'info', content: '' },
       { type: 'info', content: '🌐 Multi-Chain Summary:' },
-      { type: 'info', content: `💰 Total Portfolio Value: $${totalValue.toFixed(2)}` },
+      { type: 'info', content: `💰 Total Portfolio Value: ${formatUsdValue(totalValue)}` },
       { type: 'info', content: `🪙 Total Tokens: ${totalTokens}` },
       { type: 'info', content: `⛓️ Chains Scanned: ${results.length}` }
     );

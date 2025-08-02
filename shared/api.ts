@@ -4,6 +4,9 @@
  * Provides consistent interface for both CLI and web environments
  */
 
+import { createPublicClient, http } from 'viem';
+import { mainnet } from 'viem/chains';
+
 // Environment detection
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
@@ -39,6 +42,23 @@ export const NATIVE_TOKEN_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 // Cache for dynamically discovered USDC addresses per chain
 const USDC_ADDRESS_CACHE: Record<number, { address: string; timestamp: number }> = {};
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+// ENS resolution cache
+const ENS_CACHE: Record<string, { name: string | null; timestamp: number }> = {};
+const ENS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// Ethereum mainnet client for ENS resolution
+let ensClient: ReturnType<typeof createPublicClient> | null = null;
+
+function getEnsClient() {
+  if (!ensClient) {
+    ensClient = createPublicClient({
+      chain: mainnet,
+      transport: http()
+    });
+  }
+  return ensClient;
+}
 
 // Clear invalid cache entries (for debugging)
 function clearUsdcCache(chainId?: number) {
@@ -287,6 +307,82 @@ export async function getTokenMetadata(
   }
   
   return data;
+}
+
+/**
+ * Resolve Ethereum address to ENS name using reverse resolution
+ * Returns null if no ENS name is found or if resolution fails
+ */
+export async function resolveEnsName(address: string): Promise<string | null> {
+  if (!address || !address.startsWith('0x')) {
+    return null;
+  }
+
+  const normalizedAddress = address.toLowerCase();
+  
+  // Check cache first
+  const cached = ENS_CACHE[normalizedAddress];
+  if (cached && Date.now() - cached.timestamp < ENS_CACHE_TTL) {
+    return cached.name;
+  }
+
+  try {
+    const client = getEnsClient();
+    const ensName = await client.getEnsName({
+      address: address as `0x${string}`
+    });
+    
+    // Cache the result (including null results)
+    ENS_CACHE[normalizedAddress] = {
+      name: ensName,
+      timestamp: Date.now()
+    };
+    
+    return ensName;
+  } catch (error) {
+    console.log(`🔍 DEBUG: ENS resolution failed for ${address}:`, error);
+    
+    // Cache null result to avoid repeated failed lookups
+    ENS_CACHE[normalizedAddress] = {
+      name: null,
+      timestamp: Date.now()
+    };
+    
+    return null;
+  }
+}
+
+/**
+ * Format address with ENS name if available
+ * Returns "name.eth" if ENS name exists, or "0x123..." if no ENS name
+ */
+export async function formatAddressWithEns(address: string): Promise<string> {
+  const ensName = await resolveEnsName(address);
+  
+  if (ensName) {
+    // Show only ENS name when available
+    return ensName;
+  }
+  
+  // No ENS name, return shortened address
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+/**
+ * Format address with ENS name for connection display (shows both)
+ * Returns "name.eth (0x123...)" or just "0x123..." if no ENS name
+ */
+export async function formatAddressWithEnsForConnection(address: string): Promise<string> {
+  const ensName = await resolveEnsName(address);
+  
+  if (ensName) {
+    // Show ENS name with shortened address for connection info
+    const shortAddress = `${address.slice(0, 6)}...${address.slice(-4)}`;
+    return `${ensName} (${shortAddress})`;
+  }
+  
+  // No ENS name, return shortened address
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 /**

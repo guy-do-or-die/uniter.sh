@@ -1,17 +1,18 @@
-import { getChainId, getChainName, getSupportedChains } from '../chains.js';
-import { generateTokenScanOutput } from './display.js';
+import { getChainId, getChainName, getNetworkIdentifier, getSupportedChains } from '../chains.js';
+import { generateTokenScanOutput, formatUsdValue } from './display.js';
+import { formatAddressWithEns, formatAddressWithEnsForConnection } from '../api.js';
 import chalk from 'chalk';
 
 import { logoData } from './logo.js';
 
-import type { TerminalOutput, TerminalCommand, EnvironmentAdapter, TerminalRenderer } from './types.js';
+import type { TerminalOutput, TerminalCommand, EnvironmentAdapter, TerminalRenderer, TerminalEnvironment } from './types.js';
 import type { ScanProgress } from '../types.js';
 
 
 
 export const DELIMITER = {
   type: 'info',
-  content:'-'.repeat(47)
+  content:'-'.repeat(60)
 } as TerminalOutput;
 
 
@@ -40,20 +41,38 @@ export class UnifiedTerminalEngine {
    * Display startup logo and welcome message
    */
   displayStartupLogo(): TerminalOutput[] {
+    const output: TerminalOutput[] = [];
+    
     if (this.renderer) {
       // Get colors based on environment
       const colors = this.getTerminalColors();
       
-      return [
+      output.push(
         { type: 'info', content: 'Welcome to Uniter.sh - Unified DeFi Terminal' },
         { type: 'info', content: 'Type "help" to see available commands.' }
-      ];
+      );
+    } else {
+      output.push(
+        { type: 'info', content: '▶ UNITER.SH - Unified DeFi Terminal' },
+        { type: 'info', content: 'Type "help" to see available commands.' }
+      );
     }
     
-    return [
-      { type: 'info', content: '▶ UNITER.SH - Unified DeFi Terminal' },
-      { type: 'info', content: 'Type "help" to see available commands.' }
-    ];
+    // Check for existing wallet connection and display status
+    const env = this.adapter.getEnvironment();
+    if (env.canConnectWallet && this.adapter.isWalletConnected()) {
+      const session = this.adapter.getCurrentSession();
+      if (session) {
+        const shortAddress = `${session.address.slice(0, 6)}...${session.address.slice(-4)}`;
+        output.push(
+          { type: 'info', content: '' },
+          { type: 'success', content: `✅ Wallet connected: ${shortAddress}` },
+          { type: 'info', content: `🌐 Network: ${session.chainName}` }
+        );
+      }
+    }
+    
+    return output;
   }
 
   /**
@@ -140,10 +159,12 @@ export class UnifiedTerminalEngine {
       {
         name: 'connect',
         description: 'Connect wallet via WalletConnect',
+        aliases: ['c'],
         handler: this.handleConnect.bind(this)
       },
       {
         name: 'disconnect',
+        aliases: ['d'],
         description: 'Disconnect current wallet',
         handler: this.handleDisconnect.bind(this)
       },
@@ -156,6 +177,7 @@ export class UnifiedTerminalEngine {
       {
         name: 'scan',
         description: 'Scan tokens on specific chain',
+        aliases: ['s'],
         args: ['[chain]'],
         handler: this.handleScan.bind(this)
       },
@@ -167,6 +189,7 @@ export class UnifiedTerminalEngine {
       },
       {
         name: 'chains',
+        aliases: ['ch'],
         description: 'List supported chains',
         handler: this.handleChains.bind(this)
       },
@@ -297,16 +320,19 @@ export class UnifiedTerminalEngine {
         content: logoData
       });
     }
-    
+   
+    const uniterLink = `\x1b]8;;https://uniter.sh\x1b\\\x1b[4m\x1b[36muniter.sh\x1b[0m\x1b]8;;\x1b\\`;
+    const oneInchLink = `\x1b]8;;https://1inch.io\x1b\\\x1b[4m\x1b[36m1inch\x1b[0m\x1b]8;;\x1b\\`;
+
     outputs.push(
       DELIMITER,
       {
         type: 'info',
-        content: `\x1b[1m\x1b[96m Uniter.sh ${envInfo} — Make tokens unitETH!\x1b[0m`
+        content: `\x1b[1m\x1b[96m  ${uniterLink} ${envInfo} — Make tokens unitETH with ${oneInchLink}!\x1b[0m`
       },
       {
         type: 'info',
-        content: `\n   Type "help" to see available commands`
+        content: `\n          Type "help" to see available commands`
       },
       DELIMITER
     );
@@ -317,25 +343,68 @@ export class UnifiedTerminalEngine {
   /**
    * Get current prompt string
    */
-  getPrompt(): string {
-    const session = this.adapter.getCurrentSession();
-    if (session && session.address) {
-
-      const userIdentifier = session.ensName || `${session.address.slice(0, 6)}...${session.address.slice(-4)}`;
-      return `${userIdentifier}@uniter.sh> `;
+  async getPrompt(): Promise<string> {
+    if (this.adapter.isWalletConnected()) {
+      const session = this.adapter.getCurrentSession();
+      if (session?.address) {
+        try {
+          const userIdentifier = await formatAddressWithEns(session.address);
+          // Style the prompt with bold user identifier and darker domain
+          return `\x1b[1m\x1b[36m${userIdentifier}\x1b[0m\x1b[90m@uniter.sh\x1b[0m> `;
+        } catch (error) {
+          // Fallback to short address if ENS resolution fails
+          const userIdentifier = `${session.address.slice(0, 6)}...${session.address.slice(-4)}`;
+          return `\x1b[1m\x1b[36m${userIdentifier}\x1b[0m\x1b[90m@uniter.sh\x1b[0m> `;
+        }
+      }
     }
-    return 'guest@uniter.sh> ';
+    return '\x1b[36mguest\x1b[90m@uniter.sh\x1b[0m> ';
+  }
+
+  /**
+   * Reset session state (for web terminal exit handling)
+   */
+  resetSession(): void {
+    // Reset progress color index for fresh start
+    this.progressColorIndex = 0;
+    
+    // Disconnect wallet if connected (web environment only)
+    if (this.adapter.isWalletConnected()) {
+      try {
+        this.adapter.disconnectWallet();
+      } catch (error) {
+        // Ignore disconnect errors during reset
+      }
+    }
+  }
+
+  /**
+   * Get environment information
+   */
+  getEnvironment(): TerminalEnvironment {
+    return this.adapter.getEnvironment();
+  }
+
+  /**
+   * Restore session (for web terminal startup)
+   */
+  async restoreSession(): Promise<any> {
+    return await this.adapter.restoreSession();
   }
 
   // Command handlers
 
   private async handleHelp(): Promise<TerminalOutput[]> {
     const env = this.adapter.getEnvironment();
-    const output: TerminalOutput[] = [{
-      type: 'info',
-      content: 'Available Commands:\n'
-    }];
+    const output: TerminalOutput[] = [];
 
+    // Header
+    output.push({
+      type: 'info',
+      content: '\n\x1b[36mAvailable Commands:\x1b[0m\n'
+    });
+
+    // Commands list with better formatting
     const uniqueCommands = Array.from(new Set(Array.from(this.commands.values())));
     
     uniqueCommands.forEach(cmd => {
@@ -343,13 +412,30 @@ export class UnifiedTerminalEngine {
       const args = cmd.args ? ` ${cmd.args.join(' ')}` : '';
       output.push({
         type: 'text',
-        content: `  ${cmd.name}${args}${aliases} - ${cmd.description}`
+        content: `   \x1b[1m${cmd.name}\x1b[0m${args}${aliases}\r\n     └─ ${cmd.description}\r\n`
       });
     });
 
+    // Examples section
     output.push({
       type: 'info',
-      content: '\nExamples:\n  connect\n  scan polygon\n  multichain\n  help'
+      content: '\n\x1b[33mExamples:\x1b[0m\r\n'
+    });
+    
+    output.push({
+      type: 'text',
+      content: '   \x1b[1mconnect\x1b[0m              # Connect your wallet\r\n   \x1b[1mscan base\x1b[0m            # Scan tokens on Base\r\n   \x1b[1mmultichain\x1b[0m           # Scan all supported chains\r\n   \x1b[1mstatus\x1b[0m               # Check connection status\r\n'
+    });
+
+    // Navigation tips
+    output.push({
+      type: 'info',
+      content: '\n\x1b[32mNavigation Tips:\x1b[0m\r\n'
+    });
+    
+    output.push({
+      type: 'text',
+      content: '   \x1b[1mTab\x1b[0m                  # Auto-complete commands\r\n   \x1b[1m↑/↓ Arrow Keys\x1b[0m       # Browse command history\r\n   \x1b[1mCtrl+C (twice)\x1b[0m       # Force quit\r\n   \x1b[1mexit, quit, or q\x1b[0m     # Graceful exit\r\n'
     });
 
     if (!env.canConnectWallet) {
@@ -382,15 +468,25 @@ export class UnifiedTerminalEngine {
 
     try {
       const session = await this.adapter.connectWallet();
+      const networkId = getNetworkIdentifier(session.chainId);
+      
+      // Try to resolve ENS name for better display (with address for connection info)
+      let addressDisplay = session.address;
+      try {
+        addressDisplay = await formatAddressWithEnsForConnection(session.address);
+      } catch (error) {
+        // Keep original address if ENS resolution fails
+      }
+      
       return [{
         type: 'success',
         content: 'Wallet connected successfully'
       }, {
         type: 'info',
-        content: `Address: ${session.address}`
+        content: `Address: ${addressDisplay}`
       }, {
         type: 'info',
-        content: `Chain: ${session.chainName || 'Unknown'} (${session.chainId || 'Unknown'})`
+        content: `Network: ${networkId} (${session.chainId})`
       }];
     } catch (error) {
       return [{
@@ -446,6 +542,7 @@ export class UnifiedTerminalEngine {
 
     if (this.adapter.isWalletConnected()) {
       const session = this.adapter.getCurrentSession();
+      const chainName = session?.chainId ? getChainName(session.chainId) : 'Unknown';
       return [{
         type: 'success',
         content: 'Wallet connected'
@@ -454,7 +551,7 @@ export class UnifiedTerminalEngine {
         content: `Address: ${session?.address || 'Unknown'}`
       }, {
         type: 'info',
-        content: `Chain: ${session?.chainName || 'Unknown'} (${session?.chainId || 'Unknown'})`
+        content: `Chain: ${chainName} (${session?.chainId || 'Unknown'})`
       }];
     } else {
       return [{
@@ -489,19 +586,13 @@ export class UnifiedTerminalEngine {
     if (!chainInput) {
       return [{
         type: 'error',
-        content: 'Please specify a chain. Usage: scan <chain>\nExample: scan polygon'
+        content: 'Please specify a chain. Usage: scan <chain>\n\n\rExample: scan polygon'
       }];
     }
 
     try {
       const chainId = getChainId(chainInput);
       const chainName = getChainName(chainId);
-
-      // Display logo and loading message
-      if (this.renderer) {
-        const colors = this.getTerminalColors();
-        this.renderer.writeln(`Starting scan on ${chainName}...`);
-      }
 
       const output: TerminalOutput[] = [];
 
@@ -544,7 +635,7 @@ export class UnifiedTerminalEngine {
       }
       return [{
         type: 'error',
-        content: `Scan failed: ${error instanceof Error ? error.message : String(error)}`
+        content: `Scan failed\n\r${error instanceof Error ? error.message : String(error)}`
       }];
     }
   }
@@ -624,7 +715,7 @@ export class UnifiedTerminalEngine {
         if (this.renderer) {
           this.renderer.writeln('');
           this.renderer.writeln('🌐 Multi-Chain Summary:');
-          this.renderer.writeln(`💰 Total Portfolio Value: $${totalValue.toFixed(2)}`);
+          this.renderer.writeln(`💰 Total Portfolio Value: ${formatUsdValue(totalValue)}`);
           this.renderer.writeln(`🪙 Total Tokens: ${totalTokens}`);
           this.renderer.writeln(`⛓️ Chains Scanned: ${results.length}`);
         }
@@ -652,19 +743,25 @@ export class UnifiedTerminalEngine {
     const chains = getSupportedChains();
     const output: TerminalOutput[] = [{
       type: 'info',
-      content: '⛓️  Supported Chains:\n'
+      content: '\n\x1b[36mSupported Chains:\x1b[0m\n'
     }];
 
     chains.forEach((chain, index) => {
+      const networkId = getNetworkIdentifier(chain.id);
       output.push({
         type: 'text',
-        content: `  ${(index + 1).toString().padStart(2)}. ${chain.name.padEnd(20)} (ID: ${chain.id})`
+        content: `  ${(index + 1).toString().padStart(2)}. \x1b[1m${networkId}\x1b[0m${' '.repeat(12 - networkId.length)}${chain.name} (${chain.id})`
       });
     });
 
     output.push({
       type: 'info',
-      content: `\n📊 Total: ${chains.length} chains supported`
+      content: `\n\x1b[33mUsage:\x1b[0m Use the \x1b[1mbold identifiers\x1b[0m for commands (e.g., \x1b[1mscan zksync\x1b[0m)\n`
+    });
+
+    output.push({
+      type: 'info',
+      content: `\x1b[32mTotal:\x1b[0m ${chains.length} chains supported`
     });
 
     return output;

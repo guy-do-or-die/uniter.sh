@@ -27,19 +27,24 @@ interface SerializableSession {
 }
 
 let currentSession: WalletSession | null = null;
+let globalSignClient: any = null; // Reuse SignClient instance
 const SESSION_FILE_PATH = join(homedir(), '.uniter-session.json');
 
 /**
  * Save session to disk for persistence
  */
 function saveSession(session: WalletSession, projectId: string): void {
-  console.log('💾 saveSession() called with:', {
-    address: session.address,
-    chainId: session.chainId,
-    topic: session.topic?.substring(0, 20) + '...',
-    projectId,
-    sessionFilePath: SESSION_FILE_PATH
-  });
+  const config = loadConfig();
+  
+  if (config.debug) {
+    console.log('saveSession() called with:', {
+      address: session.address,
+      chainId: session.chainId,
+      topic: session.topic?.substring(0, 20) + '...',
+      projectId,
+      sessionFilePath: SESSION_FILE_PATH
+    });
+  }
   
   try {
     const now = Date.now();
@@ -54,25 +59,33 @@ function saveSession(session: WalletSession, projectId: string): void {
       createdAt: now,
     };
     
-    console.log('💾 Writing session to:', SESSION_FILE_PATH);
-    console.log('💾 Session data to write:', JSON.stringify(serializableSession, null, 2));
+    if (config.debug) {
+      console.log('Writing session to:', SESSION_FILE_PATH);
+      console.log('Session data to write:', JSON.stringify(serializableSession, null, 2));
+    }
     
     // Write with secure permissions (owner read/write only)
     writeFileSync(SESSION_FILE_PATH, JSON.stringify(serializableSession, null, 2), { mode: 0o600 });
     
     // Verify the file was actually written
     if (existsSync(SESSION_FILE_PATH)) {
-      console.log('✅ Session file successfully created at:', SESSION_FILE_PATH);
-      const fileContent = readFileSync(SESSION_FILE_PATH, 'utf-8');
-      console.log('✅ File content verified, size:', fileContent.length, 'bytes');
+      if (config.debug) {
+        console.log('Session file successfully created at:', SESSION_FILE_PATH);
+        const fileContent = readFileSync(SESSION_FILE_PATH, 'utf-8');
+        console.log('File content verified, size:', fileContent.length, 'bytes');
+      }
     } else {
-      console.error('❌ Session file was NOT created!');
+      console.error('Session file was NOT created!');
     }
     
-    console.log('💾 Session saved securely for future use (expires in 7 days)');
+    if (config.debug) {
+      console.log('Session saved securely for future use (expires in 7 days)');
+    }
   } catch (error) {
-    console.error('❌ Failed to save session:', (error as Error).message);
-    console.error('❌ Error stack:', (error as Error).stack);
+    console.error('Failed to save session:', (error as Error).message);
+    if (config.debug) {
+      console.error('Error stack:', (error as Error).stack);
+    }
   }
 }
 
@@ -80,30 +93,40 @@ function saveSession(session: WalletSession, projectId: string): void {
  * Load session from disk
  */
 function loadSavedSession(): SerializableSession | null {
-  console.log('🔍 Checking for saved session file...');
+  const config = loadConfig();
+  
+  if (config.debug) {
+    console.log('Checking for saved session file...');
+  }
   
   if (!existsSync(SESSION_FILE_PATH)) {
-    console.log('📁 No session file found at:', SESSION_FILE_PATH);
+    if (config.debug) {
+      console.log('No session file found at:', SESSION_FILE_PATH);
+    }
     return null;
   }
   
-  console.log('📁 Session file exists, loading...');
+  if (config.debug) {
+    console.log('Session file exists, loading...');
+  }
 
   try {
     const sessionData = readFileSync(SESSION_FILE_PATH, 'utf-8');
     const session = JSON.parse(sessionData) as SerializableSession;
     
-    console.log('📋 Loaded session data:', {
-      address: session.address,
-      chainId: session.chainId,
-      hasProjectId: !!session.projectId,
-      hasTopic: !!session.topic,
-      expiresAt: session.expiresAt ? new Date(session.expiresAt).toISOString() : 'no expiry'
-    });
+    if (config.debug) {
+      console.log('Loaded session data:', {
+        address: session.address,
+        chainId: session.chainId,
+        hasProjectId: !!session.projectId,
+        hasTopic: !!session.topic,
+        expiresAt: session.expiresAt ? new Date(session.expiresAt).toISOString() : 'no expiry'
+      });
+    }
     
     // Check if session has expired
     if (session.expiresAt && Date.now() > session.expiresAt) {
-      console.log('⚠️ Session expired, clearing...');
+      console.log('Session expired, clearing...');
       clearSavedSession();
       return null;
     }
@@ -111,20 +134,24 @@ function loadSavedSession(): SerializableSession | null {
     // Validate session data structure
     if (!session.address || !session.chainId || !session.topic || !session.projectId) {
       console.log('⚠️ Invalid session data structure, clearing...');
-      console.log('❌ Missing fields:', {
-        address: !session.address,
-        chainId: !session.chainId,
-        topic: !session.topic,
-        projectId: !session.projectId
-      });
+      if (config.debug) {
+        console.log('❌ Missing fields:', {
+          address: !session.address,
+          chainId: !session.chainId,
+          topic: !session.topic,
+          projectId: !session.projectId
+        });
+      }
       clearSavedSession();
       return null;
     }
     
-    console.log('✅ Session data is valid');
+    if (config.debug) {
+      console.log('Session data is valid');
+    }
     return session;
   } catch (error) {
-    console.warn('⚠️ Failed to load session file:', (error as Error).message);
+    console.warn('Failed to load session file:', (error as Error).message);
     clearSavedSession();
     return null;
   }
@@ -147,60 +174,114 @@ function clearSavedSession(): void {
  * Try to restore existing session from disk
  */
 export async function restoreSession(): Promise<{ address: string; chainId: number } | null> {
+  const config = loadConfig();
+  if (config.debug) {
+    console.log('🔍 DEBUG: Starting session restoration process...');
+  }
+  
   const savedSession = loadSavedSession();
   if (!savedSession) {
+    if (config.debug) {
+      console.log('❌ DEBUG: No saved session found');
+    }
     return null;
   }
+  
+  if (config.debug) {
+    console.log('✅ DEBUG: Saved session loaded successfully');
+  }
 
-  const config = loadConfig();
+  if (config.debug) {
+    console.log('🔧 DEBUG: Config loaded, checking project ID...');
+    console.log('🔧 DEBUG: Config project ID:', config.walletConnectProjectId);
+    console.log('🔧 DEBUG: Session project ID:', savedSession.projectId);
+  }
+  
   if (!config.walletConnectProjectId || config.walletConnectProjectId !== savedSession.projectId) {
-    console.log('⚠️ Saved session project ID mismatch, clearing...');
+    if (config.debug) {
+      console.log('❌ DEBUG: Saved session project ID mismatch, clearing...');
+    }
     clearSavedSession();
     return null;
   }
+  
+  if (config.debug) {
+    console.log('✅ DEBUG: Project ID matches, proceeding with restoration...');
+  }
 
   try {
-    console.log('🔄 Restoring saved session...');
-    console.log('📋 Session data:', {
-      address: savedSession.address,
-      chainId: savedSession.chainId,
-      topic: savedSession.topic.substring(0, 20) + '...',
-      projectId: savedSession.projectId,
-      expiresAt: new Date(savedSession.expiresAt).toISOString()
-    });
+    if (config.debug) {
+      console.log('🔄 DEBUG: Initializing WalletConnect client...');
+      console.log('📋 DEBUG: Session data:', {
+        address: savedSession.address,
+        chainId: savedSession.chainId,
+        topic: savedSession.topic.substring(0, 20) + '...',
+        projectId: savedSession.projectId,
+        expiresAt: new Date(savedSession.expiresAt).toISOString()
+      });
+    }
     
-    // Initialize WalletConnect client
-    const client = await SignClient.init({
-      projectId: config.walletConnectProjectId,
-      metadata: {
-        name: 'uniter.sh',
-        description: 'Unite all your onchain dust and scattered assets into a single token',
-        url: 'https://github.com/guy-do-or-die/uniter.sh',
-        icons: ['https://avatars.githubusercontent.com/u/37784886'],
-      },
-    });
+    let client = globalSignClient;
+    if (!client) {
+      client = await SignClient.init({
+        projectId: config.walletConnectProjectId,
+        metadata: {
+          name: 'uniter.sh',
+          description: 'Unite all your onchain dust and scattered assets into a single token',
+          url: 'https://github.com/guy-do-or-die/uniter.sh',
+          icons: ['https://avatars.githubusercontent.com/u/37784886'],
+        },
+      });
+      globalSignClient = client;
+    }
+    if (config.debug) {
+      console.log('✅ DEBUG: SignClient initialized successfully');
+    }
 
     // Check if the session still exists and is valid
     const sessions = client.session.getAll();
-    console.log('🔍 Found', sessions.length, 'WalletConnect sessions');
+    if (config.debug) {
+      console.log('🔍 Found', sessions.length, 'WalletConnect sessions');
+    }
     
-    const existingSession = sessions.find(s => s.topic === savedSession.topic);
+    const existingSession = sessions.find((s: any) => s.topic === savedSession.topic);
     
     if (!existingSession) {
-      console.log('⚠️ Saved session topic not found in WalletConnect sessions');
-      console.log('🔍 Available session topics:', sessions.map(s => s.topic.substring(0, 20) + '...'));
+      if (config.debug) {
+        console.log('⚠️ Saved session topic not found in WalletConnect sessions');
+        console.log('🔍 Available session topics:', sessions.map((s: any) => s.topic.substring(0, 20) + '...'));
+      }
       
-      // CRITICAL FIX: Don't immediately clear the session!
-      // WalletConnect sessions may not be immediately available in a new client instance
-      // but the session data is still valid. Try to restore the session anyway.
-      console.log('🔄 Session not found in client, but trying to restore anyway...');
-      console.log('💡 Note: WalletConnect sessions may not persist across client instances');
+      // Set currentSession with saved data even if WalletConnect session is stale
+      // This allows CLI to show wallet as connected and use saved session data
+      currentSession = {
+        address: savedSession.address,
+        chainId: savedSession.chainId,
+        client,
+        topic: savedSession.topic,
+      };
       
-      // For now, we'll restore the session optimistically
-      // In a production app, you might want to try to reconnect or validate differently
-    } else {
-      console.log('✅ Found matching WalletConnect session');
-      console.log('📋 Session accounts:', existingSession.namespaces?.eip155?.accounts || 'none');
+      console.log('💾 Session restored from saved data (WalletConnect session stale)');
+      if (config.debug) {
+        console.log('💡 Use "connect" command to re-establish live WalletConnect connection');
+        console.log('✅ DEBUG: currentSession set with saved data');
+      }
+      
+      return { address: savedSession.address, chainId: savedSession.chainId };
+    }
+    
+    console.log('✅ Found matching WalletConnect session');
+    console.log('📋 Session accounts:', existingSession.namespaces?.eip155?.accounts || 'none');
+    
+    // Validate that the session is actually active and has accounts
+    const accounts = Object.values(existingSession.namespaces || {})
+      .map((namespace: any) => namespace.accounts)
+      .flat();
+      
+    if (accounts.length === 0) {
+      console.log('⚠️ Session has no accounts, clearing stale session');
+      clearSavedSession();
+      return null;
     }
 
     // Restore session
@@ -211,13 +292,15 @@ export async function restoreSession(): Promise<{ address: string; chainId: numb
       topic: savedSession.topic,
     };
 
-    console.log('✅ Session restored successfully!');
-    console.log('📍 Address:', savedSession.address);
-    console.log('⛓️ Chain ID:', savedSession.chainId);
+    console.log('✅ DEBUG: Session restored successfully!');
+    console.log('📍 DEBUG: Address:', savedSession.address);
+    console.log('⛓️ DEBUG: Chain ID:', savedSession.chainId);
+    console.log('🎯 DEBUG: currentSession set, returning session data');
     
     return { address: savedSession.address, chainId: savedSession.chainId };
   } catch (error) {
-    console.warn('⚠️ Failed to restore session:', (error as Error).message);
+    console.error('❌ DEBUG: Failed to restore session:', (error as Error).message);
+    console.error('❌ DEBUG: Error stack:', (error as Error).stack);
     clearSavedSession();
     return null;
   }
@@ -239,21 +322,27 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
     throw new Error('REOWN_PROJECT_ID or WALLETCONNECT_PROJECT_ID is required. Please set it in your environment variables.');
   }
 
-  console.log('🔄 Initializing WalletConnect v2...');
-  console.log('🔍 Project ID:', config.walletConnectProjectId ? 'Set ✅' : 'Missing ❌');
+  console.log('Connecting to wallet...');
+  
+  if (config.debug) {
+    console.log('Project ID:', config.walletConnectProjectId ? 'Set' : 'Missing');
+    console.log('Setting up event listeners...');
+  }
 
-  // Initialize WalletConnect client
-  const client = await SignClient.init({
-    projectId: config.walletConnectProjectId,
-    metadata: {
-      name: 'uniter.sh',
-      description: 'Unite all your onchain dust and scattered assets into a single token',
-      url: 'https://github.com/guy-do-or-die/uniter.sh',
-      icons: ['https://avatars.githubusercontent.com/u/37784886'],
-    },
-  });
-
-  console.log('📱 Generating QR code for wallet connection...');
+  // Initialize WalletConnect client (reuse existing if available)
+  let client = globalSignClient;
+  if (!client) {
+    client = await SignClient.init({
+      projectId: config.walletConnectProjectId,
+      metadata: {
+        name: 'uniter.sh',
+        description: 'Unite all your onchain dust and scattered assets into a single token',
+        url: 'https://github.com/guy-do-or-die/uniter.sh',
+        icons: ['https://avatars.githubusercontent.com/u/37784886'],
+      },
+    });
+    globalSignClient = client;
+  }
 
   return new Promise(async (resolve, reject) => {
     // Set up connection timeout
@@ -262,40 +351,44 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
     }, 300000); // 5 minute timeout
 
     // Set up event listeners
-    console.log('🔍 Adding event listeners...');
+    if (config.debug) {
+      console.log('Adding event listeners...');
+    }
 
-    client.on('session_proposal', async (event) => {
-      console.log('📋 Session proposal received from wallet!');
-      console.log('🔍 Proposal details:', {
-        id: event.id,
-        chains: Object.keys(event.params.requiredNamespaces || {}),
-        methods: Object.values(event.params.requiredNamespaces || {}).map((ns: any) => ns.methods).flat(),
-        optionalChains: Object.keys(event.params.optionalNamespaces || {})
-      });
+    client.on('session_proposal', async (event: any) => {
+      console.log('Please approve the connection in your wallet app');
       
-      console.log('⚠️ WAITING for wallet to provide accounts...');
-      console.log('📱 Please approve the connection in your wallet app');
-      
-      // Wait for the wallet to approve and provide real accounts
-      // We should NOT auto-approve here - let the wallet handle it
-      console.log('🕰️ Waiting for wallet to approve and provide real accounts...');
+      if (config.debug) {
+        console.log('Session proposal received from wallet!');
+        console.log('Proposal details:', {
+          id: event.id,
+          chains: Object.keys(event.params.requiredNamespaces || {}),
+          methods: Object.values(event.params.requiredNamespaces || {}).map((ns: any) => ns.methods).flat(),
+          optionalChains: Object.keys(event.params.optionalNamespaces || {})
+        });
+        console.log('Waiting for wallet to approve and provide real accounts...');
+      }
     });
 
     // Listen for various session events that might contain real accounts
-    client.on('session_update', async (event) => {
-      console.log('🔄 Session update received!');
-      console.log('🔍 Session update details:', event);
+    client.on('session_update', async (event: any) => {
+      if (config.debug) {
+        console.log('Session update received!');
+        console.log('Session update details:', event);
+      }
       
       try {
         const session = client.session.get(event.topic);
-        console.log('✅ Session found, checking for real accounts...');
+        if (config.debug) {
+          console.log('Session found, checking for real accounts...');
+        }
         
         const accounts = Object.values(session.namespaces)
           .map((namespace: any) => namespace.accounts)
           .flat();
         
         if (accounts.length > 0 && !accounts[0].includes('0x0000000000000000000000000000000000000000')) {
-          console.log('✅ Real accounts found in session update!');
+          console.log('Wallet connected successfully');
           
           // Parse account string (format: "eip155:1:0x...")
           const accountParts = accounts[0].split(':');
@@ -314,23 +407,29 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
           resolve({ address, chainId });
         }
       } catch (error) {
-        console.log('⚠️ Session update error (might be normal):', (error as Error).message);
+        if (config.debug) {
+          console.log('Session update error (might be normal):', (error as Error).message);
+        }
       }
     });
 
     // Listen for session_connect which might be the event we need
-    client.on('session_connect', async (event) => {
-      console.log('🔗 Session connect received!');
-      console.log('🔍 Session connect details:', event);
+    client.on('session_connect', async (event: any) => {
+      if (config.debug) {
+        console.log('Session connect received!');
+        console.log('Session connect details:', event);
+      }
       
       try {
         const session = event.session;
-        console.log('✅ Session connected with accounts!');
-        console.log('🔍 Session details:', {
-          topic: session.topic,
-          namespaces: Object.keys(session.namespaces),
-          accounts: Object.values(session.namespaces).map((ns: any) => ns.accounts).flat()
-        });
+        if (config.debug) {
+          console.log('Session connected with accounts!');
+          console.log('Session details:', {
+            topic: session.topic,
+            namespaces: Object.keys(session.namespaces),
+            accounts: Object.values(session.namespaces).map((ns: any) => ns.accounts).flat()
+          });
+        }
 
         // Extract wallet info
         const accounts = Object.values(session.namespaces)
@@ -338,17 +437,23 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
           .flat();
         
         if (accounts.length === 0) {
-          console.log('⚠️ No accounts found in session_connect');
+          if (config.debug) {
+            console.log('No accounts found in session_connect');
+          }
           return;
         }
 
         // Check if we have real accounts (not placeholder)
         if (accounts[0].includes('0x0000000000000000000000000000000000000000')) {
-          console.log('⚠️ Still placeholder accounts, waiting for real ones...');
+          if (config.debug) {
+            console.log('Still placeholder accounts, waiting for real ones...');
+          }
           return;
         }
 
-        console.log('✅ Real accounts found!');
+        if (config.debug) {
+          console.log('Real accounts found!');
+        }
         
         // Parse account string (format: "eip155:1:0x...")
         const accountParts = accounts[0].split(':');
@@ -369,57 +474,61 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
         clearTimeout(timeout);
         resolve({ address, chainId });
       } catch (error) {
-        console.error('❌ Failed to process session connect:', error);
+        console.error('Failed to process session connect:', error);
       }
     });
 
-    client.on('session_request', (event) => {
-      console.log('📨 Session request received:', event);
-    });
+    if (config.debug) {
+      client.on('session_request', (event: any) => {
+        console.log('Session request received:', event);
+      });
 
-    // Add pairing event listeners
-    client.on('session_ping', (event) => {
-      console.log('🏓 Session ping received:', event);
-    });
+      // Add pairing event listeners
+      client.on('session_ping', (event: any) => {
+        console.log('Session ping received:', event);
+      });
 
-    client.on('session_event', (event) => {
-      console.log('🎆 Session event received:', event);
-    });
+      client.on('session_event', (event: any) => {
+        console.log('Session event received:', event);
+      });
 
-    // Add core pairing events
-    client.core.pairing.events.on('pairing_ping', (event) => {
-      console.log('🏓 Pairing ping:', event);
-    });
+      // Add core pairing events
+      client.core.pairing.events.on('pairing_ping', (event: any) => {
+        console.log('Pairing ping:', event);
+      });
 
-    client.core.pairing.events.on('pairing_delete', (event) => {
-      console.log('🗑️ Pairing deleted:', event);
-    });
+      client.core.pairing.events.on('pairing_delete', (event: any) => {
+        console.log('Pairing deleted:', event);
+      });
 
-    // Listen for any pairing events
-    client.core.pairing.events.on('pairing_created', (event) => {
-      console.log('🎉 Pairing created:', event);
-    });
+      // Listen for any pairing events
+      client.core.pairing.events.on('pairing_created', (event: any) => {
+        console.log('Pairing created:', event);
+      });
 
-    client.on('session_delete', (event) => {
-      console.log('🗑️ Session deleted:', event);
-    });
+      client.on('session_delete', (event: any) => {
+        console.log('Session deleted:', event);
+      });
 
-    client.on('session_expire', (event) => {
-      console.log('⏰ Session expired:', event);
-    });
+      client.on('session_expire', (event: any) => {
+        console.log('Session expired:', event);
+      });
 
-    // Add general error handling
-    client.core.relayer.on('relayer_error', (error: any) => {
-      console.error('❌ Relayer error:', error);
-    });
+      // Add general error handling
+      client.core.relayer.on('relayer_error', (error: any) => {
+        console.error('Relayer error:', error);
+      });
+    }
 
     // Log all events for debugging
-    console.log('🔍 Setting up event listeners...');
-    
-    // Check if client is properly initialized
-    console.log('🔍 Client initialized:', !!client);
-    console.log('🔍 Client core:', !!client.core);
-    console.log('🔍 Client relayer:', !!client.core?.relayer);
+    if (config.debug) {
+      console.log('Setting up event listeners...');
+      
+      // Check if client is properly initialized
+      console.log('Client initialized:', !!client);
+      console.log('Client core:', !!client.core);
+      console.log('Client relayer:', !!client.core?.relayer);
+    }
 
     // Create connection with proper error handling
     try {
@@ -434,41 +543,45 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
       });
 
       if (uri) {
-        console.log('\n' + '='.repeat(60));
-        console.log('📱 Scan this QR code with your wallet:');
-        console.log('='.repeat(60));
-        
-        // Generate ASCII QR code with small option for better visibility
+        console.log('\nScan QR code with your wallet:\n');
         qrcode.generate(uri, { small: true });
+        console.log('Waiting for wallet connection...');
         
-        console.log('='.repeat(60));
-        console.log('🔗 Or copy this WalletConnect URI:');
-        console.log('📋 ' + uri);
-        console.log('='.repeat(60));
-        console.log('⏳ Waiting for wallet connection...');
-        console.log('💡 IMPORTANT: After scanning with MetaMask Mobile:');
-        console.log('   1️⃣ Scan the QR code with your wallet camera');
-        console.log('   2️⃣ Look for a "Connect" button in MetaMask and TAP IT');
-        console.log('   3️⃣ Manually approve the connection in your wallet');
-        console.log('🔄 Alternative wallets: Trust Wallet, Rainbow, WalletConnect app');
-        
-        // Log the URI for debugging
-        console.log('🔍 Generated URI:', uri.substring(0, 50) + '...');
+        if (config.debug) {
+          console.log('WalletConnect URI:');
+          console.log(uri);
+          console.log('Instructions:');
+          console.log('   1. Scan the QR code with your wallet camera');
+          console.log('   2. Look for a "Connect" button in MetaMask and TAP IT');
+          console.log('   3. Manually approve the connection in your wallet');
+          console.log('Alternative wallets: Trust Wallet, Rainbow, WalletConnect app');
+          console.log('Generated URI:', uri.substring(0, 50) + '...');
+          console.log('   2️⃣ Look for a "Connect" button in MetaMask and TAP IT');
+          console.log('   3️⃣ Manually approve the connection in your wallet');
+          console.log('🔄 Alternative wallets: Trust Wallet, Rainbow, WalletConnect app');
+          console.log('🔍 Generated URI:', uri.substring(0, 50) + '...');
+        }
         
         // Explicitly call pairing to nudge the connection
-        console.log('🔗 Initiating explicit pairing...');
+        if (config.debug) {
+          console.log('Initiating explicit pairing...');
+        }
         try {
           await client.core.pairing.pair({ uri });
-          console.log('✅ Pairing initiated successfully');
+          if (config.debug) {
+            console.log('Pairing initiated successfully');
+          }
         } catch (pairError) {
-          console.log('⚠️ Pairing warning (this is often normal):', (pairError as Error).message);
+          if (config.debug) {
+            console.log('Pairing warning (this is often normal):', (pairError as Error).message);
+          }
         }
       } else {
-        console.error('❌ No URI generated from WalletConnect client');
+        console.error('No URI generated from WalletConnect client');
         reject(new Error('Failed to generate WalletConnect URI'));
       }
     } catch (error) {
-      console.error('❌ Error creating WalletConnect connection:', error);
+      console.error('Error creating WalletConnect connection:', error);
       clearTimeout(timeout);
       reject(error);
     }
@@ -480,7 +593,7 @@ export async function connectWallet(): Promise<{ address: string; chainId: numbe
  */
 export async function disconnectWallet(): Promise<void> {
   if (!currentSession) {
-    console.log('⚠️ No active wallet session to disconnect');
+    console.log('No active wallet session to disconnect');
     return;
   }
 
@@ -493,9 +606,9 @@ export async function disconnectWallet(): Promise<void> {
     
     currentSession = null;
     clearSavedSession();
-    console.log('✅ Wallet disconnected successfully');
+    console.log('Wallet disconnected successfully');
   } catch (error) {
-    console.error('❌ Error disconnecting wallet:', error);
+    console.error('Error disconnecting wallet:', error);
     // Clear session anyway
     currentSession = null;
     clearSavedSession();

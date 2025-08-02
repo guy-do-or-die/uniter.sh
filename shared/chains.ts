@@ -61,12 +61,7 @@ export function getChain(chainName: string): Chain {
  * Get chain configuration by chain ID
  */
 export function getChainById(chainId: number): Chain | null {
-  for (const [name, chain] of Object.entries(SUPPORTED_CHAINS)) {
-    if (chain.id === chainId) {
-      return chain;
-    }
-  }
-  return null;
+  return SUPPORTED_CHAINS.find(chain => chain.id === chainId) || null;
 }
 
 /**
@@ -92,6 +87,17 @@ export function getChainName(chainId: number): string {
 }
 
 /**
+ * Get network identifier (shorter name) by chain ID
+ */
+export function getNetworkIdentifier(chainId: number): string {
+  const chain = SUPPORTED_CHAINS.find(c => c.id === chainId);
+  if (!chain) return 'unknown';
+  
+  // Use first word of chain name in lowercase as identifier
+  return chain.name.split(' ')[0].toLowerCase();
+}
+
+/**
  * Get chain ID by chain input (name or ID)
  */
 export function getChainId(chainInput: string): number {
@@ -104,23 +110,23 @@ export function getChainId(chainInput: string): number {
     }
   }
   
-  // Fallback to name matching
+  // Fallback to name matching using first word or full name
   const normalizedInput = chainInput.toLowerCase();
   const chain = SUPPORTED_CHAINS.find(c => {
     const chainName = c.name.toLowerCase();
+    const firstWord = c.name.split(' ')[0].toLowerCase();
     return (
       chainName === normalizedInput ||
-      (normalizedInput === 'arbitrum' && chainName.includes('arbitrum')) ||
-      (normalizedInput === 'base' && chainName === 'base') ||
-      (normalizedInput === 'ethereum' && chainName === 'ethereum') ||
+      firstWord === normalizedInput ||
+      // Special aliases
       (normalizedInput === 'mainnet' && chainName === 'ethereum') ||
-      (normalizedInput === 'polygon' && chainName === 'polygon')
+      (normalizedInput === 'bsc' && chainName.includes('bnb'))
     );
   });
   
   if (!chain) {
     const supportedNames = SUPPORTED_CHAINS.map(c => c.name.toLowerCase()).join(', ');
-    throw new Error(`Unsupported chain: ${chainInput}. Supported: ${supportedNames}`);
+    throw new Error(`Unsupported chain: ${chainInput}\r\nSupported: ${supportedNames}`);
   }
   return chain.id;
 }

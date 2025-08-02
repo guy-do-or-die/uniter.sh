@@ -6,7 +6,8 @@ node_modules/
 bun.lockb
 
 # Build output
-dist*/*
+dist/
+dist-web/
 
 # IDE
 .vscode/

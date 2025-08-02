@@ -3,6 +3,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { TerminalRenderer } from '../shared/terminal/types.js';
+import { getSupportedChains, getNetworkIdentifier } from '../shared/chains.js';
 
 /**
  * Web Terminal Renderer - implements TerminalRenderer for browser environment using xterm.js
@@ -14,6 +15,13 @@ export class WebTerminalRenderer implements TerminalRenderer {
   private exitCallback?: () => void;
   private currentInput: string = '';
   private inputStartCol: number = 0;
+  private cursorPosition: number = 0;
+  private commandHistory: string[] = [];
+  private historyIndex: number = -1;
+  private currentPrompt: string = '';
+  private commands: string[] = ['help', 'connect', 'disconnect', 'status', 'scan', 'multichain', 'chains', 'clear', 'exit', 'quit', 'q'];
+  private networkIds: string[] = [];
+  private chainNames: string[] = [];
 
   constructor() {
     this.fitAddon = new FitAddon();
@@ -71,13 +79,17 @@ export class WebTerminalRenderer implements TerminalRenderer {
       // Force precise character positioning
       rescaleOverlappingGlyphs: true,
       customGlyphs: true,
-      smoothScrollDuration: 0
+      smoothScrollDuration: 0,
+      // Fix scrolling behavior
+      scrollOnUserInput: true,
+      altClickMovesCursor: false
     });
 
     // Load fit addon for terminal sizing
     this.terminal.loadAddon(this.fitAddon);
     
     this.setupXtermHandlers();
+    this.initializeAutoComplete();
   }
 
   /**
@@ -95,6 +107,25 @@ export class WebTerminalRenderer implements TerminalRenderer {
     // Open terminal
     this.terminal.open(terminalElement);
     this.fitAddon.fit();
+  
+    // Auto-focus the terminal for immediate input
+    this.terminal.focus();
+  
+    // Also focus when user clicks anywhere on the terminal
+    terminalElement.addEventListener('click', () => {
+      this.terminal.focus();
+    });
+    
+    // Ensure F5 and other browser keys work at document level
+    document.addEventListener('keydown', (event) => {
+      if (event.code === 'F5' || 
+          (event.ctrlKey && event.code === 'KeyR') || 
+          (event.metaKey && event.code === 'KeyR')) {
+        console.log('Document-level browser key detected:', event.code, 'allowing default behavior');
+        // Don't prevent default - let browser handle reload
+        return true;
+      }
+    }, { capture: true }); // Use capture to handle before terminal
 
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -108,19 +139,125 @@ export class WebTerminalRenderer implements TerminalRenderer {
   private setupXtermHandlers(): void {
     // Handle keyboard input
     this.terminal.onKey(({ key, domEvent }) => {
+      // Check for browser keys first - let them pass through completely
+      if (this.isBrowserKey(domEvent)) {
+        console.log('Browser key detected:', domEvent.code, 'letting browser handle it');
+        return; // Don't interfere with browser keys at all
+      }
+      
+      // Filter out other function keys and non-browser keys
+      if (this.shouldIgnoreKey(domEvent)) {
+        domEvent.preventDefault(); // Prevent other function keys
+        return;
+      }
+      
       const printable = !domEvent.altKey && !domEvent.ctrlKey && !domEvent.metaKey;
       
       if (domEvent.code === 'Enter') {
         this.handleEnter();
       } else if (domEvent.code === 'Backspace') {
         this.handleBackspace();
+      } else if (domEvent.code === 'Delete') {
+        this.handleDelete();
       } else if (domEvent.code === 'Tab') {
         domEvent.preventDefault();
         this.handleTabCompletion();
+      } else if (domEvent.code === 'ArrowLeft') {
+        this.handleArrowLeft();
+      } else if (domEvent.code === 'ArrowRight') {
+        this.handleArrowRight();
+      } else if (domEvent.code === 'ArrowUp') {
+        this.handleArrowUp();
+      } else if (domEvent.code === 'ArrowDown') {
+        this.handleArrowDown();
+      } else if (domEvent.code === 'Home') {
+        this.handleHome();
+      } else if (domEvent.code === 'End') {
+        this.handleEnd();
+      } else if (domEvent.ctrlKey && domEvent.code === 'KeyA') {
+        this.handleHome();
+      } else if (domEvent.ctrlKey && domEvent.code === 'KeyE') {
+        this.handleEnd();
+      } else if (domEvent.ctrlKey && domEvent.code === 'KeyU') {
+        this.handleClearLine();
       } else if (printable) {
         this.handlePrintableKey(key);
       }
     });
+    
+    // Prevent cursor from moving outside input area
+    this.terminal.onData((data) => {
+      // Block certain escape sequences that could move cursor
+      if (data.includes('\x1b[') && (data.includes('A') || data.includes('B') || data.includes('C') || data.includes('D'))) {
+        return; // Block arrow key sequences
+      }
+      
+      // Block function key escape sequences (F1-F12)
+      if (data.includes('\x1b[') && /\d+~/.test(data)) {
+        return; // Block function key sequences like [15~ (F5)
+      }
+    });
+  }
+  
+  /**
+   * Check if a key should be ignored by the terminal
+   */
+  private shouldIgnoreKey(domEvent: KeyboardEvent): boolean {
+    // Function keys (F1-F12)
+    if (domEvent.code.startsWith('F') && /^F\d+$/.test(domEvent.code)) {
+      return true;
+    }
+    
+    // Browser-specific keys that should be handled by browser
+    const browserKeys = [
+      'F5', 'F12', // Refresh, DevTools
+      'MetaLeft', 'MetaRight', // Cmd/Windows key
+      'ContextMenu', // Right-click menu
+      'PrintScreen', 'ScrollLock', 'Pause',
+      'Insert', 'PageUp', 'PageDown'
+    ];
+    
+    if (browserKeys.includes(domEvent.code)) {
+      return true;
+    }
+    
+    // Ctrl+R (refresh), Ctrl+Shift+I (DevTools), etc.
+    if (domEvent.ctrlKey && ['KeyR', 'KeyI', 'KeyJ', 'KeyU'].includes(domEvent.code) && domEvent.shiftKey) {
+      return true;
+    }
+    
+    // Cmd+R on Mac
+    if (domEvent.metaKey && domEvent.code === 'KeyR') {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Check if a key should be handled by the browser
+   */
+  private isBrowserKey(domEvent: KeyboardEvent): boolean {
+    // Keys that should trigger browser actions
+    const browserActionKeys = [
+      'F5', 'F12', // Refresh, DevTools
+    ];
+    
+    if (browserActionKeys.includes(domEvent.code)) {
+      return true;
+    }
+    
+    // Ctrl+R (refresh), Ctrl+Shift+I (DevTools), etc.
+    if (domEvent.ctrlKey && ['KeyR'].includes(domEvent.code)) {
+      return true;
+    }
+    
+    // Cmd+R on Mac
+    if (domEvent.metaKey && domEvent.code === 'KeyR') {
+      return true;
+    }
+    
+    return false;
   }
 
   /**
@@ -128,19 +265,79 @@ export class WebTerminalRenderer implements TerminalRenderer {
    */
   private handleEnter(): void {
     this.terminal.writeln('');
-    if (this.inputCallback) {
-      this.inputCallback(this.currentInput.trim());
+    const trimmedInput = this.currentInput.trim();
+    
+    // Add to command history if not empty and not duplicate
+    if (trimmedInput && (this.commandHistory.length === 0 || this.commandHistory[this.commandHistory.length - 1] !== trimmedInput)) {
+      this.commandHistory.push(trimmedInput);
+      // Keep history to reasonable size
+      if (this.commandHistory.length > 100) {
+        this.commandHistory.shift();
+      }
     }
+    
+    if (this.inputCallback) {
+      this.inputCallback(trimmedInput);
+    }
+    
     this.currentInput = '';
+    this.cursorPosition = 0;
+    this.historyIndex = -1;
   }
 
   /**
    * Handle Backspace key press
    */
   private handleBackspace(): void {
-    if (this.currentInput.length > 0) {
-      this.currentInput = this.currentInput.slice(0, -1);
-      this.terminal.write('\b \b');
+    if (this.cursorPosition > 0) {
+      const before = this.currentInput.substring(0, this.cursorPosition - 1);
+      const after = this.currentInput.substring(this.cursorPosition);
+      this.currentInput = before + after;
+      this.cursorPosition--;
+      
+      // Optimize for backspace at end of line (most common case)
+      if (after.length === 0) {
+        // Simple case: just move back and clear character
+        this.terminal.write('\b \b');
+      } else {
+        // Complex case: need to redraw (when deleting from middle)
+        this.redrawInput();
+      }
+    }
+  }
+
+  /**
+   * Handle Delete key press
+   */
+  private handleDelete(): void {
+    if (this.cursorPosition < this.currentInput.length) {
+      const before = this.currentInput.substring(0, this.cursorPosition);
+      const after = this.currentInput.substring(this.cursorPosition + 1);
+      this.currentInput = before + after;
+      
+      // Optimize for delete at end of line
+      if (this.cursorPosition === this.currentInput.length) {
+        // Simple case: just clear the character at cursor and shift content
+        this.terminal.write(' \b');
+      } else {
+        // Complex case: need to redraw (when deleting from middle)
+        this.redrawInput();
+      }
+    }
+  }
+
+  /**
+   * Initialize autocomplete data
+   */
+  private initializeAutoComplete(): void {
+    try {
+      const chains = getSupportedChains();
+      this.networkIds = chains.map((chain: { id: number; name: string }) => getNetworkIdentifier(chain.id));
+      this.chainNames = chains.map((chain: { id: number; name: string }) => chain.name.toLowerCase());
+    } catch (error) {
+      // Fallback if chains not available
+      this.networkIds = ['arbitrum', 'avalanche', 'base', 'bnb', 'gnosis', 'linea', 'ethereum', 'optimism', 'polygon', 'sonic', 'unichain', 'zksync'];
+      this.chainNames = ['arbitrum one', 'avalanche', 'base', 'bnb smart chain', 'gnosis', 'linea mainnet', 'ethereum', 'op mainnet', 'polygon', 'sonic', 'unichain', 'zksync era'];
     }
   }
 
@@ -148,16 +345,172 @@ export class WebTerminalRenderer implements TerminalRenderer {
    * Handle Tab key press for tab completion
    */
   private handleTabCompletion(): void {
-    // Tab completion will be handled by the unified renderer
-    this.terminal.write('\x07'); // Bell character for now
+    const trimmed = this.currentInput.trim();
+    const parts = trimmed.split(' ');
+    
+    if (parts.length === 1) {
+      // Complete command names
+      const hits = this.commands.filter(cmd => cmd.startsWith(parts[0]));
+      if (hits.length === 1) {
+        // Single match - complete it
+        const completion = hits[0];
+        this.currentInput = completion + ' ';
+        this.cursorPosition = this.currentInput.length;
+        this.redrawInput();
+      } else if (hits.length > 1) {
+        // Multiple matches - show them
+        this.terminal.write('\r\n');
+        this.terminal.writeln(hits.join('  '));
+        // Redraw prompt and input properly
+        this.terminal.write(this.currentPrompt);
+        this.inputStartCol = this.getVisibleLength(this.currentPrompt);
+        this.terminal.write(this.currentInput);
+        this.cursorPosition = this.currentInput.length;
+        // Ensure cursor is positioned correctly
+        const targetCol = this.inputStartCol + this.cursorPosition + 1;
+        this.terminal.write(`\x1b[${targetCol}G`);
+      } else {
+        // No matches - bell
+        this.terminal.write('\x07');
+      }
+    } else if (parts.length === 2 && (parts[0] === 'scan' || parts[0] === 's')) {
+      // Complete network identifiers for scan command
+      const input = parts[1].toLowerCase();
+      const networkHits = this.networkIds.filter(network => network.startsWith(input));
+      const chainHits = this.chainNames.filter(chain => chain.startsWith(input));
+      const allHits = [...new Set([...networkHits, ...chainHits])];
+      
+      if (allHits.length === 1) {
+        // Single match - complete it
+        const completion = allHits[0];
+        this.currentInput = `${parts[0]} ${completion} `;
+        this.cursorPosition = this.currentInput.length;
+        this.redrawInput();
+      } else if (allHits.length > 1) {
+        // Multiple matches - show them
+        this.terminal.write('\r\n');
+        this.terminal.writeln(allHits.join('  '));
+        // Redraw prompt and input properly
+        this.terminal.write(this.currentPrompt);
+        this.inputStartCol = this.getVisibleLength(this.currentPrompt);
+        this.terminal.write(this.currentInput);
+        this.cursorPosition = this.currentInput.length;
+        // Ensure cursor is positioned correctly
+        const targetCol = this.inputStartCol + this.cursorPosition + 1;
+        this.terminal.write(`\x1b[${targetCol}G`);
+      } else {
+        // No matches - bell
+        this.terminal.write('\x07');
+      }
+    } else {
+      // No completion available - bell
+      this.terminal.write('\x07');
+    }
   }
 
   /**
    * Handle printable key press
    */
   private handlePrintableKey(key: string): void {
-    this.currentInput += key;
-    this.terminal.write(key);
+    // Insert character at cursor position
+    const before = this.currentInput.substring(0, this.cursorPosition);
+    const after = this.currentInput.substring(this.cursorPosition);
+    this.currentInput = before + key + after;
+    this.cursorPosition++;
+    
+    // If inserting in middle, redraw entire input
+    if (after.length > 0) {
+      this.redrawInput();
+    } else {
+      // Just append at end
+      this.terminal.write(key);
+    }
+  }
+
+  /**
+   * Handle arrow key navigation
+   */
+  private handleArrowLeft(): void {
+    if (this.cursorPosition > 0) {
+      this.cursorPosition--;
+      this.terminal.write('\x1b[D'); // Move cursor left
+    }
+  }
+  
+  private handleArrowRight(): void {
+    if (this.cursorPosition < this.currentInput.length) {
+      this.cursorPosition++;
+      this.terminal.write('\x1b[C'); // Move cursor right
+    }
+  }
+  
+  private handleArrowUp(): void {
+    if (this.commandHistory.length > 0) {
+      if (this.historyIndex === -1) {
+        this.historyIndex = this.commandHistory.length - 1;
+      } else if (this.historyIndex > 0) {
+        this.historyIndex--;
+      }
+      this.setInputFromHistory();
+    }
+  }
+  
+  private handleArrowDown(): void {
+    if (this.historyIndex !== -1) {
+      if (this.historyIndex < this.commandHistory.length - 1) {
+        this.historyIndex++;
+        this.setInputFromHistory();
+      } else {
+        this.historyIndex = -1;
+        this.currentInput = '';
+        this.cursorPosition = 0;
+        this.redrawInput();
+      }
+    }
+  }
+  
+  private handleHome(): void {
+    this.cursorPosition = 0;
+    this.terminal.write(`\x1b[${this.inputStartCol + 1}G`); // Move to start of input
+  }
+  
+  private handleEnd(): void {
+    this.cursorPosition = this.currentInput.length;
+    this.terminal.write(`\x1b[${this.inputStartCol + this.currentInput.length + 1}G`); // Move to end of input
+  }
+  
+  private handleClearLine(): void {
+    this.currentInput = '';
+    this.cursorPosition = 0;
+    this.redrawInput();
+  }
+  
+  /**
+   * Set input from command history
+   */
+  private setInputFromHistory(): void {
+    if (this.historyIndex >= 0 && this.historyIndex < this.commandHistory.length) {
+      this.currentInput = this.commandHistory[this.historyIndex];
+      this.cursorPosition = this.currentInput.length;
+      this.redrawInput();
+    }
+  }
+  
+  /**
+   * Redraw the current input line
+   */
+  private redrawInput(): void {
+    // Save current cursor position
+    const targetCol = this.inputStartCol + this.cursorPosition + 1;
+    
+    // Move to start of input area
+    this.terminal.write(`\x1b[${this.inputStartCol + 1}G`);
+    // Clear from input start to end of line
+    this.terminal.write('\x1b[K');
+    // Write the current input
+    this.terminal.write(this.currentInput);
+    // Position cursor correctly
+    this.terminal.write(`\x1b[${targetCol}G`);
   }
 
   // Core rendering methods
@@ -202,14 +555,27 @@ export class WebTerminalRenderer implements TerminalRenderer {
   }
 
   clearProgress(): void {
-    // Clear current line
+    // Clear current line and move to next (consistent with CLI)
     this.terminal.write('\r\x1b[K');
   }
 
   // Input/prompt methods
   showPrompt(prompt: string): void {
+    this.currentPrompt = prompt;
     this.terminal.write(prompt);
-    this.inputStartCol = prompt.length;
+    // Calculate input start column by counting visible characters (excluding ANSI codes)
+    this.inputStartCol = this.getVisibleLength(prompt);
+    this.currentInput = '';
+    this.cursorPosition = 0;
+    this.historyIndex = -1;
+  }
+  
+  /**
+   * Get visible length of string excluding ANSI escape codes
+   */
+  private getVisibleLength(str: string): number {
+    // Remove ANSI escape sequences to get actual visible length
+    return str.replace(/\x1b\[[0-9;]*m/g, '').length;
   }
 
   getCurrentInput(): string {

@@ -39,6 +39,8 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        padding: 0 20px 20px 20px; /* Add padding to container instead */
+        box-sizing: border-box;
       }
       
       .terminal-header {
@@ -77,8 +79,33 @@
       #terminal {
         flex: 1;
         background: #0d1117;
-        padding: 16px;
+        padding: 0;
         overflow: hidden;
+        position: relative;
+        min-height: 0; /* Allow flex shrinking */
+      }
+      
+      /* Fix xterm.js scrolling - let xterm handle all scrolling */
+      .xterm {
+        height: 100% !important;
+        width: 100% !important;
+        padding: 10px; /* Add internal padding to xterm content */
+        box-sizing: border-box;
+      }
+      
+      .xterm-viewport {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-width: thin;
+      }
+      
+      .xterm-screen {
+        white-space: nowrap !important;
+      }
+      
+      /* Hide horizontal scrollbar completely */
+      .xterm-viewport::-webkit-scrollbar:horizontal {
+        display: none;
       }
       
       .loading {
