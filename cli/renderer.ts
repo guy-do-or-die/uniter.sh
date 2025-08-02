@@ -2,8 +2,8 @@
 
 import readline from 'readline';
 import chalk from 'chalk';
-import { TerminalRenderer } from '../shared/terminal/types.js';
-import { getSupportedChains, getNetworkIdentifier } from '../shared/chains.js';
+import { TerminalRenderer } from '../core/terminal/types.js';
+import { getSupportedChains, getNetworkIdentifier } from '../core/chains.js';
 
 /**
  * CLI Terminal Renderer - implements TerminalRenderer for Node.js CLI environment

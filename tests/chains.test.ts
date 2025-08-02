@@ -6,7 +6,7 @@ import {
   getPublicClient,
   testChainConnection,
   SUPPORTED_CHAINS 
-} from '../shared/chains';
+} from '../core/chains';
 
 describe('Chain Utilities', () => {
   it('should get chain config by name', () => {

@@ -40,8 +40,8 @@ export function loadBrowserConfig(): UniterConfig {
   const config: UniterConfig = {
     ...DEFAULT_CONFIG,
     // Environment variables from import.meta.env
-    ...(import.meta.env.VITE_ONEINCH_API_KEY && { 
-      oneinchApiKey: import.meta.env.VITE_ONEINCH_API_KEY 
+    ...(import.meta.env.ONEINCH_API_KEY && { 
+      oneinchApiKey: import.meta.env.ONEINCH_API_KEY 
     }),
     // Support both old WALLETCONNECT_PROJECT_ID and new REOWN_PROJECT_ID
     ...((import.meta.env.VITE_REOWN_PROJECT_ID || import.meta.env.VITE_WALLETCONNECT_PROJECT_ID) && { 

@@ -1,5 +1,5 @@
-import { EnvironmentAdapter, TerminalEnvironment } from '../shared/terminal/index.js';
-import { unifiedScan, scanMultichain } from '../shared/portfolio-display.js';
+import { EnvironmentAdapter, TerminalEnvironment } from '../core/terminal/index.js';
+import { unifiedScan, scanMultichain } from '../core/portfolio-display.js';
 import { loadBrowserConfig } from './config.js';
 import { 
   connectWallet, 
@@ -13,7 +13,7 @@ import {
 console.log('Environment variables loaded:', {
   REOWN_PROJECT_ID: import.meta.env.VITE_REOWN_PROJECT_ID ? '✅ Present' : '❌ Missing',
   WALLETCONNECT_PROJECT_ID: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ? '✅ Present' : '❌ Missing',
-  ONEINCH_API_KEY: import.meta.env.VITE_ONEINCH_API_KEY ? '✅ Present' : '❌ Missing'
+  ONEINCH_API_KEY: import.meta.env.ONEINCH_API_KEY ? '✅ Present' : '❌ Missing'
 });
 
 /**
@@ -59,9 +59,8 @@ export class WebAdapter implements EnvironmentAdapter {
     // Use browser-compatible config loader
     const browserConfig = loadBrowserConfig();
     
-    if (!browserConfig.oneinchApiKey) {
-      throw new Error('1inch API key not found. Please set VITE_ONEINCH_API_KEY environment variable.');
-    }
+    // In browser environment, API key is handled by Vite proxy - pass empty string
+    const apiKey = '';
     
     // Use the same session format as CLI
     const walletSession = {
@@ -72,7 +71,7 @@ export class WebAdapter implements EnvironmentAdapter {
     };
     
     // Use the truly unified scanner with progress callback
-    const { result } = await unifiedScan(walletSession, browserConfig.oneinchApiKey, 5, onProgress);
+    const { result } = await unifiedScan(walletSession, apiKey, 5, onProgress);
     return result;
   }
 
@@ -84,9 +83,8 @@ export class WebAdapter implements EnvironmentAdapter {
     // Use browser-compatible config loader
     const browserConfig = loadBrowserConfig();
     
-    if (!browserConfig.oneinchApiKey) {
-      throw new Error('1inch API key not found. Please set VITE_ONEINCH_API_KEY environment variable.');
-    }
+    // In browser environment, API key is handled by Vite proxy - pass empty string
+    const apiKey = '';
     
     // Use the same session format as CLI
     const walletSession = {
@@ -103,7 +101,7 @@ export class WebAdapter implements EnvironmentAdapter {
     }
     
     // Use unified multi-chain scanner with progress callback
-    const { results } = await scanMultichain(walletSession, browserConfig.oneinchApiKey, browserConfig.defaultMinUsdValue || 5, onProgress);
+    const { results } = await scanMultichain(walletSession, apiKey, browserConfig.defaultMinUsdValue || 5, onProgress);
     return results;
   }
 

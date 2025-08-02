@@ -1,6 +1,6 @@
-import { EnvironmentAdapter, TerminalEnvironment } from '../shared/terminal/index.js';
+import { EnvironmentAdapter, TerminalEnvironment } from '../core/terminal/index.js';
 import { connectWallet, disconnectWallet, isWalletConnected, getCurrentSession, restoreSession } from './wallet.js';
-import { unifiedScan, scanMultichain } from '../shared/portfolio-display.js';
+import { unifiedScan, scanMultichain } from '../core/portfolio-display.js';
 import { loadConfig } from './config.js';
 
 /**

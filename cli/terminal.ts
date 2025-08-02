@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import dotenv from 'dotenv';
-import { UnifiedTerminalEngine, UnifiedTerminalRenderer } from '../shared/terminal/index.js';
+import { UnifiedTerminalEngine, UnifiedTerminalRenderer } from '../core/terminal/index.js';
 import { CliTerminalRenderer as CliRenderer } from './renderer.js';
 
 // Load environment variables

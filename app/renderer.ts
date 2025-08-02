@@ -2,8 +2,8 @@ import '@xterm/xterm/css/xterm.css';
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { TerminalRenderer } from '../shared/terminal/types.js';
-import { getSupportedChains, getNetworkIdentifier } from '../shared/chains.js';
+import { TerminalRenderer } from '../core/terminal/types.js';
+import { getSupportedChains, getNetworkIdentifier } from '../core/chains.js';
 
 /**
  * Web Terminal Renderer - implements TerminalRenderer for browser environment using xterm.js

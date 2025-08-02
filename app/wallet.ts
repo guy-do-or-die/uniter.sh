@@ -7,7 +7,7 @@ import { connect, disconnect, getAccount, getChainId, reconnect } from '@wagmi/c
 import { createConfig, http } from 'wagmi';
 import { createStorage } from 'wagmi';
 import { injected, walletConnect } from 'wagmi/connectors';
-import { SUPPORTED_CHAINS, getChainName } from '../shared/chains.js';
+import { SUPPORTED_CHAINS, getChainName } from '../core/chains.js';
 import { loadBrowserConfig } from './config.js';
 
 // Web wallet session interface

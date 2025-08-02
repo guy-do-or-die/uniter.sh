@@ -6,11 +6,12 @@ describe('Environment Variables', () => {
     console.log('Environment variables test:');
     console.log('VITE_REOWN_PROJECT_ID:', import.meta.env.VITE_REOWN_PROJECT_ID);
     console.log('VITE_WALLETCONNECT_PROJECT_ID:', import.meta.env.VITE_WALLETCONNECT_PROJECT_ID);
-    console.log('VITE_ONEINCH_API_KEY:', import.meta.env.VITE_ONEINCH_API_KEY);
+    console.log('ONEINCH_API_KEY:', 'Hidden (server-side only)');
     
-    // Basic assertions
+    // Basic assertions - only check client-side accessible variables
     expect(import.meta.env.VITE_REOWN_PROJECT_ID).toBeDefined();
-    expect(import.meta.env.VITE_ONEINCH_API_KEY).toBeDefined();
+    // ONEINCH_API_KEY should NOT be accessible to client-side code for security
+    expect(import.meta.env.ONEINCH_API_KEY).toBeUndefined();
   });
 });
 
@@ -19,6 +20,6 @@ export function testEnv() {
   return {
     VITE_REOWN_PROJECT_ID: import.meta.env.VITE_REOWN_PROJECT_ID,
     VITE_WALLETCONNECT_PROJECT_ID: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-    VITE_ONEINCH_API_KEY: import.meta.env.VITE_ONEINCH_API_KEY
+    // ONEINCH_API_KEY is intentionally not exposed to client-side for security
   };
 }

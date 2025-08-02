@@ -1,4 +1,4 @@
-import { UnifiedTerminalEngine, UnifiedTerminalRenderer } from '../shared/terminal/index.js';
+import { UnifiedTerminalEngine, UnifiedTerminalRenderer } from '../core/terminal/index.js';
 import { WebTerminalRenderer as WebRenderer } from './renderer.js';
 import { WebAdapter } from './adapter.js';
 

@@ -11,8 +11,8 @@ import { mainnet } from 'viem/chains';
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
 
-// CORS proxy for browser environments
-const CORS_PROXY = 'https://corsproxy.io/?';
+// Vite dev proxy endpoint for browser environments
+const VITE_PROXY_BASE = '/api/1inch';
 const ONEINCH_BASE_URL = 'https://api.1inch.dev';
 
 // Debug environment detection
@@ -22,15 +22,14 @@ console.log(`🌍 DEBUG: Environment detection - isBrowser: ${isBrowser}, isNode
  * Get the appropriate API URL based on environment
  */
 function getApiUrl(endpoint: string): string {
-  const fullUrl = `${ONEINCH_BASE_URL}${endpoint}`;
-  
   if (isBrowser) {
-    // Use CORS proxy in browser (same format as working browser-specific API)
-    const proxiedUrl = `${CORS_PROXY}${fullUrl}`;
-    console.log(`🌐 DEBUG: Browser environment - using CORS proxy: ${proxiedUrl}`);
+    // Use Vite dev proxy in browser (no API key needed, handled by proxy)
+    const proxiedUrl = `${VITE_PROXY_BASE}${endpoint}`;
+    console.log(`🌐 DEBUG: Browser environment - using Vite proxy: ${proxiedUrl}`);
     return proxiedUrl;
   } else {
     // Direct access in Node.js
+    const fullUrl = `${ONEINCH_BASE_URL}${endpoint}`;
     console.log(`🖥️ DEBUG: Node.js environment - direct API call: ${fullUrl}`);
     return fullUrl;
   }
@@ -108,6 +107,19 @@ export interface OneInchSearchResponse {
 
 export type OneInchSearchResults = OneInchSearchResponse[];
 
+// Rate limiting for 1inch API to prevent 429 errors
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 100; // 100ms between requests
+
+async function delayIfNeeded() {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    await new Promise(resolve => globalThis.setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
+  }
+  lastRequestTime = Date.now();
+}
+
 /**
  * Dynamically find USDC address on a given chain using 1inch search API
  */
@@ -133,15 +145,23 @@ export async function findUsdcAddress(
   console.log(`🔍 DEBUG: No cache found, searching for USDC on chain ${chainId}...`);
 
   try {
+    // Rate limiting to prevent 429 errors
+    await delayIfNeeded();
+    
     const url = getApiUrl(`/token/v1.3/${chainId}/search?query=USDC`);
     console.log(`🔍 DEBUG: Making USDC search request to: ${url}`);
     console.log(`🔍 DEBUG: Using API key: ${apiKey ? 'Present' : 'Missing'}`);
     
+    const headers: Record<string, string> = {
+      'accept': 'application/json',
+    };
+    
+    if (isNode && apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+    
     const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'accept': 'application/json',
-      },
+      headers,
     });
     
     console.log(`🔍 DEBUG: USDC search response status: ${response.status} ${response.statusText}`);
@@ -197,17 +217,25 @@ export async function getWalletBalances(
   walletAddress: string,
   apiKey: string
 ): Promise<OneInchBalanceResponse> {
-  if (!apiKey) {
+  if (!apiKey && isNode) {
     throw new Error('1inch API key not provided');
   }
 
+  // Rate limiting to prevent 429 errors
+  await delayIfNeeded();
+  
   const url = getApiUrl(`/balance/v1.2/${chainId}/balances/${walletAddress}`);
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Accept': 'application/json',
-    },
-  });
+  
+  // Build headers conditionally - Vite proxy handles auth in browser
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+  };
+  
+  if (isNode && apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+  
+  const response = await fetch(url, { headers });
 
   if (!response.ok) {
     throw new Error(`1inch Balance API error: ${response.status} ${response.statusText}`);
@@ -225,20 +253,27 @@ export async function getTokenMetadata(
   chainId: number,
   apiKey: string
 ): Promise<OneInchTokenMetadata> {
-  if (!apiKey) {
+  if (!apiKey && isNode) {
     throw new Error('1inch API key not provided');
   }
 
+  // Rate limiting to prevent 429 errors
+  await delayIfNeeded();
+  
   const url = getApiUrl(`/token/v1.2/${chainId}`);
   console.log(`🔍 DEBUG: Fetching metadata for chain ${chainId}`);
   console.log(`🔍 DEBUG: Using URL: ${url}`);
 
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Accept': 'application/json',
-    },
-  });
+  // Build headers conditionally - Vite proxy handles auth in browser
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+  };
+  
+  if (isNode && apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+  
+  const response = await fetch(url, { headers });
 
   console.log(`🔍 DEBUG: Response status: ${response.status}`);
   console.log(`🔍 DEBUG: Response headers:`, Object.fromEntries(response.headers.entries()));
@@ -397,28 +432,49 @@ export async function getQuote(
   amount: string,
   apiKey: string
 ): Promise<OneInchQuoteResponse | null> {
-  if (!apiKey) {
+  if (!apiKey && isNode) {
     throw new Error('1inch API key not provided');
   }
+
+  // Rate limiting to prevent 429 errors
+  await delayIfNeeded();
 
   // Use v6.0 API with src/dst parameters (working CLI logic)
   const url = getApiUrl(`/swap/v6.0/${chainId}/quote?src=${fromTokenAddress}&dst=${toTokenAddress}&amount=${amount}`);
   
   try {
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Accept': 'application/json',
-      },
+    // Build headers conditionally - Vite proxy handles auth in browser
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (isNode && apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+    
+    const response = await fetch(url, { headers });
+
+    console.log(`🔍 DEBUG: Quote request for ${fromTokenAddress}:`, {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
     });
 
     if (!response.ok) {
       // Graceful failure like CLI - return null instead of throwing
       console.log(`🔍 DEBUG: 1inch API error for ${fromTokenAddress}: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.log(`🔍 DEBUG: Error response body:`, errorText);
       return null;
     }
 
     const result = await response.json();
+    console.log(`🔍 DEBUG: Quote response for ${fromTokenAddress}:`, {
+      dstAmount: result.dstAmount,
+      srcAmount: result.srcAmount,
+      hasProtocols: !!result.protocols
+    });
     return result;
   } catch (error) {
     // Graceful failure like CLI - return null instead of throwing

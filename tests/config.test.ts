@@ -34,21 +34,21 @@ describe('Configuration Management', () => {
     process.env.DEFAULT_TARGET_TOKEN = 'USDT';
     process.env.DEFAULT_CHAIN = 'ethereum';
     process.env.DEFAULT_MIN_USD_VALUE = '10';
-    process.env.VITE_ONEINCH_API_KEY = 'test-api-key';
+    process.env.ONEINCH_API_KEY = 'test-api-key';
     process.env.VITE_WALLETCONNECT_PROJECT_ID = 'test-project-id';
 
     const config = loadConfig();
     
     expect(config.defaultChain).toBe('ethereum');
     expect(config.defaultMinUsdValue).toBe(10);
-    expect(config.oneinchApiKey).toBe(process.env.VITE_ONEINCH_API_KEY);
+    expect(config.oneinchApiKey).toBe(process.env.ONEINCH_API_KEY);
     expect(config.walletConnectProjectId).toBe(process.env.VITE_REOWN_PROJECT_ID || process.env.VITE_WALLETCONNECT_PROJECT_ID);
 
     // Clean up
     delete process.env.DEFAULT_TARGET_TOKEN;
     delete process.env.DEFAULT_CHAIN;
     delete process.env.DEFAULT_MIN_USD_VALUE;
-    delete process.env.VITE_ONEINCH_API_KEY;
+    delete process.env.ONEINCH_API_KEY;
     delete process.env.VITE_WALLETCONNECT_PROJECT_ID;
   });
 
@@ -73,7 +73,7 @@ describe('Configuration Management', () => {
 
     const validation = validateConfig(invalidConfig);
     expect(validation.valid).toBe(false);
-    expect(validation.missing).toContain('VITE_ONEINCH_API_KEY environment variable');
+    expect(validation.missing).toContain('ONEINCH_API_KEY environment variable');
     expect(validation.missing).toContain('VITE_WALLETCONNECT_PROJECT_ID environment variable');
   });
 

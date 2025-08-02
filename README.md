@@ -66,7 +66,7 @@ npm run cli
 ### Environment Variables
 ```bash
 # Required for CLI
-VITE_ONEINCH_API_KEY=your_1inch_api_key
+ONEINCH_API_KEY=your_1inch_api_key
 VITE_REOWN_PROJECT_ID=your_walletconnect_project_id
 
 # Optional

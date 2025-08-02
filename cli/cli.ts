@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { UnifiedTerminalEngine } from '../shared/terminal/index.js';
+import { UnifiedTerminalEngine } from '../core/terminal/index.js';
 import { CliAdapter } from './adapter.js';
 import { CliTerminalRenderer } from './terminal.js';
 import { restoreSession } from './wallet.js';

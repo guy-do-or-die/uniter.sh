@@ -31,7 +31,13 @@ export async function scanTokens(
   dustThresholdUsd: number = 5,
   api: ApiImplementation = defaultApi
 ): Promise<TokenScanResult> {
-  if (!config.oneinchApiKey) {
+  // Environment detection
+  const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+  const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
+  
+  // Only require API key in Node.js environment (CLI)
+  // In browser, Vite proxy handles authentication
+  if (!config.oneinchApiKey && isNode) {
     throw new Error('1inch API key not configured');
   }
 
@@ -195,7 +201,13 @@ export async function scanTokensMultiChain(
   dustThresholdUsd: number = 5,
   api: ApiImplementation = defaultApi
 ): Promise<TokenScanResult[]> {
-  if (!config.oneinchApiKey) {
+  // Environment detection
+  const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+  const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
+  
+  // Only require API key in Node.js environment (CLI)
+  // In browser, Vite proxy handles authentication
+  if (!config.oneinchApiKey && isNode) {
     throw new Error('1inch API key not configured');
   }
 

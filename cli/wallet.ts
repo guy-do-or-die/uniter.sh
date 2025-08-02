@@ -2,7 +2,7 @@ import { SignClient } from '@walletconnect/sign-client';
 import { getSdkError } from '@walletconnect/utils';
 import qrcode from 'qrcode-terminal';
 import { loadConfig } from './config.js';
-import { SUPPORTED_CHAINS } from '../shared/chains.js';
+import { SUPPORTED_CHAINS } from '../core/chains.js';
 import { createPublicClient, http } from 'viem';
 import { sepolia } from 'viem/chains';
 import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';

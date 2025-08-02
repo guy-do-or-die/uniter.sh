@@ -30,5 +30,29 @@ export default defineConfig({
     headers: {
       'ngrok-skip-browser-warning': 'true'
     },
+    proxy: {
+      '/api/1inch': {
+        target: 'https://api.1inch.dev',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/1inch/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, _req, _res) => {
+            // Add API key from environment variable
+            const apiKey = process.env.ONEINCH_API_KEY;
+            console.log('🔑 Vite Proxy Debug:', {
+              apiKeyPresent: !!apiKey,
+              apiKeyLength: apiKey?.length || 0,
+              url: _req.url
+            });
+            if (apiKey) {
+              proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
+              console.log('✅ Added Authorization header to proxy request');
+            } else {
+              console.error('❌ No API key found in process.env.ONEINCH_API_KEY');
+            }
+          });
+        }
+      }
+    }
   },
 });
