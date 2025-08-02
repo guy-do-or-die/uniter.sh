@@ -1,10 +1,32 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { proxyToOneInch, ProxyRequest } from './proxy.js';
 
-// Force Node.js runtime to enable console logging in Vercel
-export const config = {
-  runtime: 'nodejs18.x'
-};
+// Edge-compatible logging function
+async function edgeLog(level: 'info' | 'warn' | 'error', message: string, data?: any) {
+  // Option 1: Send to webhook (if WEBHOOK_URL is set)
+  const webhookUrl = process.env.DEBUG_WEBHOOK_URL;
+  if (webhookUrl) {
+    try {
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level,
+          message,
+          data,
+          source: '1inch-api'
+        })
+      });
+    } catch (e) {
+      // Fail silently for logging
+    }
+  }
+  
+  // Option 2: Still use console (works in some edge environments)
+  const logFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+  logFn(`[${level.toUpperCase()}] ${message}`, data || '');
+}
 
 // Helper functions for debug analysis
 function getEndpointType(apiPath: string): string {
@@ -63,14 +85,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     
     if (isDebug) {
-      console.log(`✅ API key found in Vercel API route, length: ${apiKey.length}`);
-      console.log('🔧 About to check API key length...');
+      await edgeLog('info', `✅ API key found in Vercel API route, length: ${apiKey.length}`);
       if (apiKey.length < 32) {
-        console.log('🔧 API key is short, showing warning...');
-        console.warn('⚠️ API key seems unusually short, may be invalid');
-        console.log('⚠️ API key seems unusually short, may be invalid (as log)');
-      } else {
-        console.log('🔧 API key length is OK');
+        await edgeLog('warn', '⚠️ API key seems unusually short, may be invalid');
       }
     }
 
@@ -93,21 +110,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const apiPath = pathMatch[1];
     if (isDebug) {
-      console.log(`🔗 Extracted API path: ${apiPath}`);
-      console.log('🔧 Checking path for issues...');
+      await edgeLog('info', `🔗 Extracted API path: ${apiPath}`);
       
       // Warn about potentially problematic paths
       if (apiPath.includes('..') || apiPath.includes('//')) {
-        console.log('🔧 Found suspicious path, showing warning...');
-        console.warn(`⚠️ Suspicious path detected: ${apiPath}`);
-        console.log(`⚠️ Suspicious path detected: ${apiPath} (as log)`);
+        await edgeLog('warn', `⚠️ Suspicious path detected: ${apiPath}`);
       }
       if (!apiPath.includes('/v1.')) {
-        console.log('🔧 Path missing version info, showing warning...');
-        console.warn(`⚠️ Path doesn't contain version info, may be invalid: ${apiPath}`);
-        console.log(`⚠️ Path doesn't contain version info, may be invalid: ${apiPath} (as log)`);
-      } else {
-        console.log('🔧 Path looks OK');
+        await edgeLog('warn', `⚠️ Path doesn't contain version info, may be invalid: ${apiPath}`);
       }
     }
 
@@ -121,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Use proxy utilities
     if (isDebug) {
-      console.log(`📡 Making 1inch API request: ${req.method} ${apiPath}`);
+      await edgeLog('info', `📡 Making 1inch API request: ${req.method} ${apiPath}`);
     }
     const proxyResponse = await proxyToOneInch(proxyRequest, apiKey, {
       logPrefix: isDebug ? '🚀 Vercel' : undefined
@@ -130,10 +140,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Warn about non-200 responses
     if (isDebug) {
       if (proxyResponse.status !== 200) {
-        console.warn(`⚠️ 1inch API returned non-200 status: ${proxyResponse.status} for ${apiPath}`);
+        await edgeLog('warn', `⚠️ 1inch API returned non-200 status: ${proxyResponse.status} for ${apiPath}`);
       }
       if (proxyResponse.data.length === 0) {
-        console.warn(`⚠️ 1inch API returned empty response for ${apiPath}`);
+        await edgeLog('warn', `⚠️ 1inch API returned empty response for ${apiPath}`);
       }
     }
 
@@ -144,6 +154,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('X-Debug-Length', proxyResponse.data.length.toString());
     res.setHeader('X-Debug-Path', apiPath);
     res.setHeader('X-Debug-Endpoint-Type', getEndpointType(apiPath));
+    
+    // Add debug warnings as headers when in debug mode
+    if (isDebug) {
+      const warnings = [];
+      if (apiKey && apiKey.length < 32) {
+        warnings.push('api-key-short');
+      }
+      if (apiPath.includes('..') || apiPath.includes('//')) {
+        warnings.push('suspicious-path');
+      }
+      if (!apiPath.includes('/v1.')) {
+        warnings.push('missing-version');
+      }
+      if (proxyResponse.status !== 200) {
+        warnings.push(`non-200-status-${proxyResponse.status}`);
+      }
+      if (proxyResponse.data.length === 0) {
+        warnings.push('empty-response');
+      }
+      
+      if (warnings.length > 0) {
+        res.setHeader('X-Debug-Warnings', warnings.join(','));
+      }
+    }
 
     // Try to parse as JSON, fallback to text
     try {
