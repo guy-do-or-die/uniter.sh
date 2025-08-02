@@ -508,18 +508,18 @@ export class UnifiedTerminalEngine {
     if (env.isBrowser) {
       output.push({
         type: 'text',
-        content: '\r\nTry CLI version    \x1b[33mnpm install -g uniter.sh\x1b[0m\r\n'
+        content: 'CLI version        \x1b[33mnpm install -g uniter.sh\x1b[0m'
       });
     } else {
       output.push({
         type: 'text',
-        content: `\r\nTry web version    ${uniterLink}\r\n`
+        content: `Web version        ${uniterLink}`
       });
     }
 
     output.push({
       type: 'text',
-      content: `\r\nThe code           ${githubLink}\r\n`
+      content: `The code           ${githubLink}`
     });
 
     return output;
