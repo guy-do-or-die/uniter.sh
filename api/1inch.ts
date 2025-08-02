@@ -1,6 +1,11 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { proxyToOneInch, ProxyRequest } from './proxy.js';
 
+// Force Node.js runtime to enable console logging in Vercel
+export const config = {
+  runtime: 'nodejs18.x'
+};
+
 // Helper functions for debug analysis
 function getEndpointType(apiPath: string): string {
   if (apiPath.includes('/balance/')) return 'balance';
@@ -43,6 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Check if debug mode is enabled
     const isDebug = true;//req.query.debug === 'true';
+    console.log('🔧 DEBUG MODE ENABLED - isDebug =', isDebug);
     
     // Validate API key
     const apiKey = process.env.ONEINCH_API_KEY;
@@ -58,8 +64,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (isDebug) {
       console.log(`✅ API key found in Vercel API route, length: ${apiKey.length}`);
+      console.log('🔧 About to check API key length...');
       if (apiKey.length < 32) {
+        console.log('🔧 API key is short, showing warning...');
         console.warn('⚠️ API key seems unusually short, may be invalid');
+        console.log('⚠️ API key seems unusually short, may be invalid (as log)');
+      } else {
+        console.log('🔧 API key length is OK');
       }
     }
 
@@ -83,13 +94,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const apiPath = pathMatch[1];
     if (isDebug) {
       console.log(`🔗 Extracted API path: ${apiPath}`);
+      console.log('🔧 Checking path for issues...');
       
       // Warn about potentially problematic paths
       if (apiPath.includes('..') || apiPath.includes('//')) {
+        console.log('🔧 Found suspicious path, showing warning...');
         console.warn(`⚠️ Suspicious path detected: ${apiPath}`);
+        console.log(`⚠️ Suspicious path detected: ${apiPath} (as log)`);
       }
       if (!apiPath.includes('/v1.')) {
+        console.log('🔧 Path missing version info, showing warning...');
         console.warn(`⚠️ Path doesn't contain version info, may be invalid: ${apiPath}`);
+        console.log(`⚠️ Path doesn't contain version info, may be invalid: ${apiPath} (as log)`);
+      } else {
+        console.log('🔧 Path looks OK');
       }
     }
 
