@@ -33,7 +33,4 @@ coverage/
 # Config files (keep example)
 .uniterrc
 
-
-# Local plan
-PLAN.md
-FARCASTER.md
+local/
