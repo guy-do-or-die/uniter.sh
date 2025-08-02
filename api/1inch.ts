@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { proxyToOneInch, type ProxyRequest } from './proxy';
+import { proxyToOneInch, type ProxyRequest } from './proxy.js';
 
 /**
  * Vercel API route for 1inch proxy
@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Build proxy request
     const proxyRequest: ProxyRequest = {
-      url: `/api/1inch/${apiPath}`,
+      url: fullPath, // Use the original request URL
       method: req.method || 'GET',
       body: req.body,
       query: req.query
