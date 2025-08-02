@@ -12,10 +12,24 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>uniter.sh</title>
+    
+    <!-- Farcaster miniapp meta tags -->
+    <meta name="description" content="Unite all your onchain dust and scattered assets into a single token in one smart command" />
+    <meta property="og:title" content="uniter.sh" />
+    <meta property="og:description" content="Unite all your onchain dust and scattered assets into a single token in one smart command" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://uniter.sh" />
+    <meta property="og:image" content="https://uniter.sh/android-chrome-512x512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="uniter.sh" />
+    <meta name="twitter:description" content="Unite all your onchain dust and scattered assets into a single token in one smart command" />
+    <meta name="twitter:image" content="https://uniter.sh/android-chrome-512x512.png" />
+
     <!-- Inter font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
     <style>
       * {
         margin: 0;
@@ -46,6 +60,13 @@
         flex-direction: column;
         padding: 20px; /* Symmetric padding for balanced scrollbar positioning */
         box-sizing: border-box;
+      }
+      
+      /* Farcaster miniapp optimization */
+      @media (max-width: 500px), (max-height: 600px) {
+        .terminal-container {
+          padding: 4px 8px 8px 4px; /* Reduced left padding for tighter fit */
+        }
       }
       
       /* Mobile responsiveness */
@@ -163,7 +184,7 @@
         scrollbar-color: #58a6ff #161b22;
       }
       
-      /* Style terminal container horizontal scrollbar */
+      /* Style terminal container scrollbars */
       #terminal::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -183,6 +204,38 @@
       #terminal::-webkit-scrollbar-thumb:hover {
         background: #79c0ff;
         opacity: 1;
+      }
+      
+      /* Hide horizontal scrollbar by default - Enhanced for Farcaster */
+      #terminal::-webkit-scrollbar:horizontal {
+        height: 0px !important;
+        transition: height 0.3s ease;
+      }
+      
+      /* Also target xterm viewport scrollbars */
+      #terminal .xterm-viewport::-webkit-scrollbar:horizontal {
+        height: 0px !important;
+        transition: height 0.3s ease;
+      }
+      
+      /* Show horizontal scrollbar when scrolling horizontally */
+      #terminal.scrolling-horizontal::-webkit-scrollbar:horizontal,
+      #terminal.scrolling-horizontal .xterm-viewport::-webkit-scrollbar:horizontal {
+        height: 6px !important;
+      }
+      
+      /* Fallback for non-webkit browsers */
+      #terminal {
+        scrollbar-width: thin;
+        scrollbar-color: #58a6ff #161b22;
+      }
+      
+      #terminal:not(.scrolling-horizontal) {
+        overflow-x: hidden;
+      }
+      
+      #terminal.scrolling-horizontal {
+        overflow-x: auto;
       }
       
       /* Fix xterm.js scrolling - let xterm handle all scrolling */

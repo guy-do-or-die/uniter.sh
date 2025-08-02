@@ -18,5 +18,17 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      '.ngrok-free.app',
+      '.ngrok.io',
+      '.ngrok.app',
+      'uniter.sh',
+      '.uniter.sh'
+    ],
+    headers: {
+      'ngrok-skip-browser-warning': 'true'
+    },
   },
 });

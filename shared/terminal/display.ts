@@ -2,6 +2,38 @@ import type { TerminalOutput } from './types.js';
 import type { TokenScanResult } from '../types.js';
 import { formatUnits } from 'viem';
 
+// Width constraints for different environments
+const MINIAPP_MAX_WIDTH = 50; // Maximum visible width in Farcaster miniapp
+const DESKTOP_MAX_WIDTH = 60; // Standard desktop width
+
+/**
+ * Detect if running in Farcaster miniapp environment
+ */
+function isMiniappEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth < 500 || window.innerHeight < 600;
+}
+
+/**
+ * Format text with width constraints for current environment
+ */
+function formatForEnvironment(text: string, maxWidth?: number): string {
+  const targetWidth = maxWidth || (isMiniappEnvironment() ? MINIAPP_MAX_WIDTH : DESKTOP_MAX_WIDTH);
+  
+  // If text fits within width, return as-is
+  if (text.length <= targetWidth) {
+    return text;
+  }
+  
+  // For longer text, try to abbreviate intelligently
+  if (text.includes('complete')) {
+    return text.replace('complete', '✓').substring(0, targetWidth);
+  }
+  
+  // Truncate with ellipsis
+  return text.substring(0, targetWidth - 3) + '...';
+}
+
 // ============================================================================
 // UNIFIED TOKEN DISPLAY FUNCTIONS
 // Moved from CLI token-display.ts to provide consistent formatting across environments
@@ -144,7 +176,7 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
   if (!scanResult || !scanResult.tokens || scanResult.tokens.length === 0) {
     output.push({
       type: 'warning',
-      content: 'Scan complete - No tokens found'
+      content: formatForEnvironment('Scan complete - No tokens found')
     });
     return output;
   }
@@ -152,7 +184,7 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
   // Portfolio summary header with colors
   output.push({
     type: 'info',
-    content: '\n\x1b[36m=== PORTFOLIO SUMMARY ===\x1b[0m'
+    content: formatForEnvironment('\n\x1b[36m=== PORTFOLIO SUMMARY ===\x1b[0m')
   });
   
   const totalValueFormatted = formatUsdValue(scanResult.totalUSD);
@@ -233,7 +265,7 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
   
   output.push({
     type: 'info',
-    content: '\x1b[36m============================================================\x1b[0m'
+    content: formatForEnvironment('\x1b[36m============================================================\x1b[0m')
   });
   
   return output;

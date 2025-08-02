@@ -33,6 +33,7 @@
   "author": "guy-do-or-die",
   "license": "MIT",
   "dependencies": {
+    "@farcaster/miniapp-sdk": "^0.1.8",
     "@reown/appkit": "^1.0.0",
     "@reown/appkit-adapter-wagmi": "^1.0.0",
     "@types/inquirer": "^9.0.8",

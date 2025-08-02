@@ -27,12 +27,24 @@ export class WebTerminalRenderer implements TerminalRenderer {
     this.fitAddon = new FitAddon();
     
     // Calculate responsive font size based on screen width
+    // Optimized for Farcaster miniapp environments
     const getResponsiveFontSize = (): number => {
       const width = window.innerWidth;
-      if (width <= 480) return 11;  // Small phones
-      if (width <= 768) return 12;  // Larger phones/small tablets
-      if (width <= 1024) return 13; // Tablets
-      return 14; // Desktop
+      const height = window.innerHeight;
+      
+      // Detect Farcaster miniapp environment (typically smaller containers)
+      const isMiniappEnvironment = width < 500 || height < 600;
+      
+      if (isMiniappEnvironment) {
+        return 10;  // Compact fit for miniapp containers
+      } else if (width <= 480) {
+        return 10;  // Small phones
+      } else if (width <= 768) {
+        return 11;  // Larger phones/small tablets
+      } else if (width <= 1024) {
+        return 12; // Tablets
+      }
+      return 13; // Desktop
     };
     
     // Create xterm terminal with professional dark theme and enhanced ANSI support
@@ -92,8 +104,8 @@ export class WebTerminalRenderer implements TerminalRenderer {
       // Fix scrolling behavior
       scrollOnUserInput: true,
       altClickMovesCursor: false,
-      // Critical settings for horizontal scrolling
-      cols: 120  // Fixed width to prevent wrapping
+      // Fixed width to preserve ANSI art logo
+      cols: 120  // Keep original width for logo integrity
       // Don't set fixed rows - let it use available height
     });
 
@@ -119,16 +131,19 @@ export class WebTerminalRenderer implements TerminalRenderer {
     // Open terminal
     this.terminal.open(terminalElement);
     
-    // Use fit addon for height calculation but maintain fixed width
+    // Use fit addon for height calculation but maintain responsive width
     this.fitAddon.fit();
-    // Override the width to maintain fixed columns for horizontal scrolling
+    // Override the width to maintain fixed columns for ANSI art
     this.terminal.resize(120, this.terminal.rows);
   
     // Auto-focus the terminal for immediate input
     this.terminal.focus();
     
-    // Setup horizontal scroll detection to hide/show vertical scrollbar
+    // Setup scrollbar visibility control
     this.setupScrollbarVisibilityControl(terminalElement);
+    
+    // Setup horizontal scrollbar auto-hide
+    this.setupHorizontalScrollbarAutoHide(terminalElement);
   
     // Also focus when user clicks anywhere on the terminal
     terminalElement.addEventListener('click', () => {
@@ -150,23 +165,60 @@ export class WebTerminalRenderer implements TerminalRenderer {
     window.addEventListener('resize', () => {
       this.updateFontSize();
       
-      // Update font size and recalculate height while keeping fixed width
+      // Update font size and recalculate height while keeping responsive width
       this.fitAddon.fit();
-      // Override width to maintain 120 columns for horizontal scrolling
+      // Override width to maintain 120 columns for ANSI art
       this.terminal.resize(120, this.terminal.rows);
     });
   }
 
   /**
-   * Update font size based on window width
+   * Calculate optimal column width based on viewport and environment
+   */
+  private getOptimalColumns(): number {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    
+    // Detect Farcaster miniapp environment
+    const isMiniappEnvironment = width < 500 || height < 600;
+    
+    if (isMiniappEnvironment) {
+      // Smaller column count for miniapp containers
+      return Math.max(60, Math.floor(width / 8)); // Minimum 60 cols, responsive to width
+    } else if (width <= 480) {
+      return 80;  // Small phones
+    } else if (width <= 768) {
+      return 100; // Larger phones/small tablets
+    } else if (width <= 1024) {
+      return 110; // Tablets
+    }
+    return 120; // Desktop - original width
+  }
+
+  /**
+   * Update font size based on window width and height
+   * Optimized for Farcaster miniapp environments
    */
   private updateFontSize(): void {
     const width = window.innerWidth;
+    const height = window.innerHeight;
     let fontSize: number;
-    if (width <= 480) fontSize = 11;  // Small phones
-    else if (width <= 768) fontSize = 12;  // Larger phones/small tablets
-    else if (width <= 1024) fontSize = 13; // Tablets
-    else fontSize = 14; // Desktop
+    
+    // Detect Farcaster miniapp environment
+    const isMiniappEnvironment = width < 500 || height < 600;
+    
+    if (isMiniappEnvironment) {
+      fontSize = 10;  // Compact fit for miniapp containers
+    } else if (width <= 480) {
+      fontSize = 10;  // Small phones
+    } else if (width <= 768) {
+      fontSize = 11;  // Larger phones/small tablets
+    } else if (width <= 1024) {
+      fontSize = 12; // Tablets
+    } else {
+      fontSize = 13; // Desktop
+    }
+    
     this.terminal.options.fontSize = fontSize;
   }
 
@@ -394,6 +446,62 @@ export class WebTerminalRenderer implements TerminalRenderer {
         xtermViewport.style.setProperty('overflow-y', 'auto', 'important');
       }
     });
+  }
+
+  /**
+   * Setup horizontal scrollbar auto-hide functionality
+   * Enhanced for Farcaster miniapp environment
+   */
+  private setupHorizontalScrollbarAutoHide(terminalElement: HTMLElement): void {
+    let scrollTimeout: NodeJS.Timeout;
+    
+    // Function to handle scroll events
+    const handleScroll = () => {
+      const scrollLeft = terminalElement.scrollLeft;
+      
+      // Show horizontal scrollbar when scrolling horizontally
+      if (scrollLeft > 0) {
+        terminalElement.classList.add('scrolling-horizontal');
+        console.log('Horizontal scrollbar shown, scrollLeft:', scrollLeft);
+      } else {
+        terminalElement.classList.remove('scrolling-horizontal');
+        console.log('Horizontal scrollbar hidden, scrollLeft:', scrollLeft);
+      }
+      
+      // Clear existing timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
+      
+      // Hide horizontal scrollbar after scrolling stops
+      scrollTimeout = setTimeout(() => {
+        if (terminalElement.scrollLeft === 0) {
+          terminalElement.classList.remove('scrolling-horizontal');
+          console.log('Horizontal scrollbar auto-hidden after timeout');
+        }
+      }, 1500); // Increased to 1.5 seconds for better UX
+    };
+    
+    // Add scroll event listener
+    terminalElement.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Also listen on the xterm viewport for better Farcaster compatibility
+    const observer = new MutationObserver(() => {
+      const xtermViewport = terminalElement.querySelector('.xterm-viewport');
+      if (xtermViewport) {
+        xtermViewport.addEventListener('scroll', handleScroll, { passive: true });
+        observer.disconnect();
+      }
+    });
+    
+    observer.observe(terminalElement, { childList: true, subtree: true });
+    
+    // Initial check in case we're already scrolled
+    setTimeout(() => {
+      if (terminalElement.scrollLeft > 0) {
+        terminalElement.classList.add('scrolling-horizontal');
+      }
+    }, 100);
   }
 
   /**

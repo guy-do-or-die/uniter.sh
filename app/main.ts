@@ -1,12 +1,26 @@
 import { WebTerminalRenderer } from './terminal.js';
+import { miniapp } from './miniapp.js';
 
 /**
  * Initialize the web terminal application
  */
 async function initWebTerminal(): Promise<void> {
   try {
+    // Initialize Farcaster integration
+    await miniapp.initialize();
+    
+    // Initialize the web terminal
     const webTerminal = new WebTerminalRenderer();
     await webTerminal.init();
+    
+    // Notify Farcaster that the miniapp is ready to display
+    await miniapp.signalReady();
+    
+    // Log user context if available
+    const userContext = await miniapp.getUserContext();
+    if (userContext) {
+      console.log('Farcaster user context:', userContext);
+    }
   } catch (error) {
     console.error('Failed to initialize web terminal:', error);
     const terminalElement = document.getElementById('terminal');
@@ -17,6 +31,13 @@ async function initWebTerminal(): Promise<void> {
           <small>${error instanceof Error ? error.message : String(error)}</small>
         </div>
       `;
+    }
+    
+    // Still try to signal ready even if terminal init failed
+    try {
+      await miniapp.signalReady();
+    } catch (farcasterError) {
+      console.log('Failed to signal Farcaster ready state');
     }
   }
 }

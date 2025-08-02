@@ -15,6 +15,38 @@ export const DELIMITER = {
   content:'-'.repeat(60)
 } as TerminalOutput;
 
+// Width constraints for different environments
+const MINIAPP_MAX_WIDTH = 50; // Maximum visible width in Farcaster miniapp
+const DESKTOP_MAX_WIDTH = 60; // Standard desktop width
+
+/**
+ * Detect if running in Farcaster miniapp environment
+ */
+function isMiniappEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth < 500 || window.innerHeight < 600;
+}
+
+/**
+ * Format text with width constraints for current environment
+ */
+function formatForEnvironment(text: string, maxWidth?: number): string {
+  const targetWidth = maxWidth || (isMiniappEnvironment() ? MINIAPP_MAX_WIDTH : DESKTOP_MAX_WIDTH);
+  
+  // If text fits within width, return as-is
+  if (text.length <= targetWidth) {
+    return text;
+  }
+  
+  // For longer text, try to abbreviate intelligently
+  if (text.includes('complete')) {
+    return text.replace('complete', '✓').substring(0, targetWidth);
+  }
+  
+  // Truncate with ellipsis
+  return text.substring(0, targetWidth - 3) + '...';
+}
+
 
 /**
  * Unified terminal engine that works in both CLI and web environments
@@ -480,7 +512,7 @@ export class UnifiedTerminalEngine {
       
       return [{
         type: 'success',
-        content: 'Wallet connected successfully'
+        content: formatForEnvironment('Wallet connected successfully')
       }, {
         type: 'info',
         content: `Address: ${addressDisplay}`
@@ -517,7 +549,7 @@ export class UnifiedTerminalEngine {
       await this.adapter.disconnectWallet();
       return [{
         type: 'success',
-        content: 'Wallet disconnected successfully'
+        content: formatForEnvironment('Wallet disconnected successfully')
       }];
     } catch (error) {
       return [{
@@ -570,7 +602,7 @@ export class UnifiedTerminalEngine {
     if (!env.canScanTokens) {
       return [{
         type: 'warning',
-        content: '⚠️  Token scanning not available in web environment.\nThis is a demo terminal. Use the CLI version for real token scanning.'
+        content: formatForEnvironment('⚠️  Token scanning not available in web environment.\nThis is a demo terminal. Use the CLI version for real token scanning.')
       }];
     }
 
@@ -646,7 +678,7 @@ export class UnifiedTerminalEngine {
     if (!env.canScanTokens) {
       return [{
         type: 'warning',
-        content: '⚠️  Multichain scanning not available in web environment.\nThis is a demo terminal. Use the CLI version for real multichain scanning.'
+        content: formatForEnvironment('⚠️  Multichain scanning not available in web environment.\nThis is a demo terminal. Use the CLI version for real multichain scanning.')
       }];
     }
 
@@ -716,18 +748,18 @@ export class UnifiedTerminalEngine {
           this.renderer.writeln('');
           this.renderer.writeln('🌐 Multi-Chain Summary:');
           this.renderer.writeln(`💰 Total Portfolio Value: ${formatUsdValue(totalValue)}`);
-          this.renderer.writeln(`🪙 Total Tokens: ${totalTokens}`);
-          this.renderer.writeln(`⛓️ Chains Scanned: ${results.length}`);
+          this.renderer.writeln(`🪙 Total Tokens: ${totalTokens.toString().padStart(3)}`);
+          this.renderer.writeln(`⛓️ Chains Scanned: ${results.length.toString().padStart(2)}`);
         }
       } else {
         if (this.renderer) {
-          this.renderer.writeln('❌ No tokens found across all chains');
+          this.renderer.writeln(formatForEnvironment('❌ No tokens found across all chains'));
         }
       }
       
       output.push({
         type: 'success',
-        content: '✅ Multichain scan complete!'
+        content: formatForEnvironment('✅ Multichain scan complete!')
       });
 
       return output;
