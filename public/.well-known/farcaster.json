@@ -1,0 +1,48 @@
+{
+  "miniapp": {
+    "version": "1",
+    "name": "uniter.sh",
+    "iconUrl": "https://uniter.sh/android-chrome-512x512.png",
+    "homeUrl": "https://uniter.sh",
+    "imageUrl": "https://uniter.sh/android-chrome-512x512.png",
+    "buttonTitle": "🦄 Unite",
+    "splashImageUrl": "https://uniter.sh/android-chrome-512x512.png",
+    "splashBackgroundColor": "#0d1117",
+    "subtitle": "Unite your onchain dust into ETH",
+    "description": "Unite all your onchain dust and scattered assets into a single token in one smart command. Terminal-based DeFi portfolio management across multiple chains.",
+    "tagline": "Make tokens unitETH with 1inch!",
+    "primaryCategory": "finance",
+    "tags": [
+      "defi",
+      "portfolio",
+      "multichain",
+      "1inch",
+      "terminal",
+      "eth",
+      "tokens"
+    ],
+    "heroImageUrl": "https://uniter.sh/android-chrome-512x512.png",
+    "ogTitle": "uniter.sh",
+    "ogDescription": "Unite all your onchain dust and scattered assets into a single token in one smart command",
+    "ogImageUrl": "https://uniter.sh/android-chrome-512x512.png",
+    "screenshotUrls": [],
+    "requiredChains": [
+      "eip155:42161",
+      "eip155:43114",
+      "eip155:8453",
+      "eip155:56",
+      "eip155:100",
+      "eip155:59144",
+      "eip155:1",
+      "eip155:10",
+      "eip155:137",
+      "eip155:146",
+      "eip155:1135",
+      "eip155:324"
+    ],
+    "requiredCapabilities": [
+      "actions.signIn",
+      "wallet.getEthereumProvider"
+    ]
+  }
+}

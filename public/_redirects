@@ -1,0 +1,2 @@
+# Netlify redirects for Farcaster miniapp manifest
+/.well-known/farcaster.json /farcaster.json 200
