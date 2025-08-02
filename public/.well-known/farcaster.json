@@ -44,5 +44,10 @@
       "actions.signIn",
       "wallet.getEthereumProvider"
     ]
+  },
+  "accountAssociation": {
+    "header": "eyJmaWQiOjMyMTMwMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweEZFQzQ0ODY1YTAxMDQ1NDhFNTU2N0YxNTY0NjIyYkQ5N0Y1NDQ3OTkifQ",
+    "payload": "eyJkb21haW4iOiJ1bml0ZXIuc2gifQ",
+    "signature": "MHg3MTcyNmI5Y2NkZWFlZTcxZDVmOTBlOWU0OTk0MTEyY2RmNjU0MWQ0NWQ4ODBmOWI2MzdhOWUzZTc0NmFkOTk5MjZkNmQyYzliYzMxNTI4NjI2ZWI5ZjMyNDRlZTVjZTJkN2IwZGYwM2QxMmRiMWZiOTQ5ZTU4ZWI3NzAwZDFkNDFi"
   }
 }
