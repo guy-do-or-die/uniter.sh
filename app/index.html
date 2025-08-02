@@ -30,6 +30,11 @@
         height: 100vh;
         overflow: hidden;
         cursor: text;
+        /* Mobile optimizations */
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        user-select: none;
       }
       
       .terminal-container {
@@ -43,6 +48,19 @@
         box-sizing: border-box;
       }
       
+      /* Mobile responsiveness */
+      @media (max-width: 768px) {
+        .terminal-container {
+          padding: 0 5px 5px 5px; /* Smaller padding on mobile */
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .terminal-container {
+          padding: 0 3px 3px 3px; /* Even smaller padding on small phones */
+        }
+      }
+      
       .terminal-header {
         background: #161b22;
         padding: 8px 16px;
@@ -52,6 +70,16 @@
         align-items: center;
         min-height: 32px;
         font-size: 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      
+      @media (max-width: 768px) {
+        .terminal-header {
+          padding: 6px 12px;
+          min-height: 28px;
+          font-size: 11px;
+        }
       }
       
       .terminal-title {
@@ -62,25 +90,73 @@
         align-items: center;
         gap: 8px;
         letter-spacing: 0.5px;
+        flex-shrink: 0;
+      }
+      
+      @media (max-width: 768px) {
+        .terminal-title {
+          font-size: 12px;
+          gap: 6px;
+          letter-spacing: 0.3px;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .terminal-title {
+          font-size: 11px;
+          gap: 4px;
+          letter-spacing: 0.2px;
+        }
       }
       
       .terminal-logo {
         width: 24px;
         height: 24px;
         object-fit: contain;
+        flex-shrink: 0;
+      }
+      
+      @media (max-width: 768px) {
+        .terminal-logo {
+          width: 20px;
+          height: 20px;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .terminal-logo {
+          width: 18px;
+          height: 18px;
+        }
       }
       
       .terminal-info {
         color: #7d8590;
         font-size: 11px;
         opacity: 0.8;
+        text-align: right;
+        flex-shrink: 1;
+        min-width: 0;
+      }
+      
+      @media (max-width: 768px) {
+        .terminal-info {
+          font-size: 10px;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .terminal-info {
+          font-size: 9px;
+          display: none; /* Hide on very small screens */
+        }
       }
       
       #terminal {
         flex: 1;
         background: #0d1117;
         padding: 0;
-        overflow: hidden;
+        overflow: hidden; /* Let xterm handle scrolling */
         position: relative;
         min-height: 0; /* Allow flex shrinking */
       }
@@ -93,10 +169,87 @@
         box-sizing: border-box;
       }
       
+      @media (max-width: 768px) {
+        .xterm {
+          padding: 8px;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .xterm {
+          padding: 6px;
+        }
+        
+        /* Ensure terminal is accessible on small screens */
+        body {
+          font-size: 14px;
+        }
+      }
+      
+      /* Mobile-specific touch optimizations */
+      @media (hover: none) and (pointer: coarse) {
+        .terminal-container {
+          /* Improve touch scrolling on mobile */
+          -webkit-overflow-scrolling: touch;
+        }
+        
+        .xterm {
+          /* Better touch interaction */
+          touch-action: pan-y;
+        }
+        
+        .terminal-header {
+          /* Prevent accidental zoom on double-tap */
+          touch-action: manipulation;
+        }
+      }
+      
       .xterm-viewport {
         overflow-y: auto !important;
-        overflow-x: hidden !important;
+        overflow-x: auto !important;
         scrollbar-width: thin;
+        scrollbar-color: #58a6ff #161b22;
+      }
+      
+      /* Custom scrollbar styling */
+      .xterm-viewport::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      
+      .xterm-viewport::-webkit-scrollbar-track {
+        background: #161b22;
+        border-radius: 4px;
+      }
+      
+      .xterm-viewport::-webkit-scrollbar-thumb {
+        background: #58a6ff;
+        border-radius: 4px;
+        opacity: 0.7;
+      }
+      
+      .xterm-viewport::-webkit-scrollbar-thumb:hover {
+        background: #79c0ff;
+        opacity: 1;
+      }
+      
+      /* Mobile optimizations */
+      @media (max-width: 768px) {
+        .xterm-viewport {
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: thin;
+        }
+        
+        /* Thinner scrollbars on mobile */
+        .xterm-viewport::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        
+        /* Ensure content doesn't wrap but fits properly */
+        .xterm-screen {
+          white-space: nowrap !important;
+        }
       }
       
       .xterm-screen {

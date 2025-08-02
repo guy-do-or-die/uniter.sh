@@ -26,6 +26,15 @@ export class WebTerminalRenderer implements TerminalRenderer {
   constructor() {
     this.fitAddon = new FitAddon();
     
+    // Calculate responsive font size based on screen width
+    const getResponsiveFontSize = (): number => {
+      const width = window.innerWidth;
+      if (width <= 480) return 11;  // Small phones
+      if (width <= 768) return 12;  // Larger phones/small tablets
+      if (width <= 1024) return 13; // Tablets
+      return 14; // Desktop
+    };
+    
     // Create xterm terminal with professional dark theme and enhanced ANSI support
     this.terminal = new Terminal({
       theme: {
@@ -52,7 +61,7 @@ export class WebTerminalRenderer implements TerminalRenderer {
         brightWhite: '#f0f6fc'
       },
       fontFamily: '"DejaVu Sans Mono", "Liberation Mono", "Consolas", "Menlo", "Monaco", "Cascadia Code", monospace',
-      fontSize: 14,
+      fontSize: getResponsiveFontSize(),
       lineHeight: 1.0,
       letterSpacing: -0.1,
       cursorBlink: true,
@@ -82,7 +91,10 @@ export class WebTerminalRenderer implements TerminalRenderer {
       smoothScrollDuration: 0,
       // Fix scrolling behavior
       scrollOnUserInput: true,
-      altClickMovesCursor: false
+      altClickMovesCursor: false,
+      // Critical settings for horizontal scrolling
+      cols: 120  // Fixed width to prevent wrapping
+      // Don't set fixed rows - let it use available height
     });
 
     // Load fit addon for terminal sizing
@@ -106,7 +118,11 @@ export class WebTerminalRenderer implements TerminalRenderer {
     
     // Open terminal
     this.terminal.open(terminalElement);
+    
+    // Use fit addon for height calculation but maintain fixed width
     this.fitAddon.fit();
+    // Override the width to maintain fixed columns for horizontal scrolling
+    this.terminal.resize(120, this.terminal.rows);
   
     // Auto-focus the terminal for immediate input
     this.terminal.focus();
@@ -129,8 +145,26 @@ export class WebTerminalRenderer implements TerminalRenderer {
 
     // Handle window resize
     window.addEventListener('resize', () => {
+      this.updateFontSize();
+      
+      // Update font size and recalculate height while keeping fixed width
       this.fitAddon.fit();
+      // Override width to maintain 120 columns for horizontal scrolling
+      this.terminal.resize(120, this.terminal.rows);
     });
+  }
+
+  /**
+   * Update font size based on window width
+   */
+  private updateFontSize(): void {
+    const width = window.innerWidth;
+    let fontSize: number;
+    if (width <= 480) fontSize = 11;  // Small phones
+    else if (width <= 768) fontSize = 12;  // Larger phones/small tablets
+    else if (width <= 1024) fontSize = 13; // Tablets
+    else fontSize = 14; // Desktop
+    this.terminal.options.fontSize = fontSize;
   }
 
   /**
