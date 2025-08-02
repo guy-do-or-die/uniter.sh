@@ -59,17 +59,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       logPrefix: '🚀 Vercel'
     });
 
-    // Set response headers
+    // Set response headers with debug info
     res.status(proxyResponse.status);
     res.setHeader('Content-Type', proxyResponse.headers['content-type'] || 'application/json');
+    res.setHeader('X-Debug-Status', proxyResponse.status.toString());
+    res.setHeader('X-Debug-Length', proxyResponse.data.length.toString());
+    res.setHeader('X-Debug-Path', apiPath);
 
     // Try to parse as JSON, fallback to text
     try {
       const jsonData = JSON.parse(proxyResponse.data);
-      res.json(jsonData);
+      
+      // Add debug information for token metadata endpoints
+      if (apiPath.includes('token/v1.2') && req.query.debug === 'true') {
+        const debugInfo = {
+          _debug: {
+            originalPath: apiPath,
+            responseStatus: proxyResponse.status,
+            dataLength: proxyResponse.data.length,
+            hasPrice: 'price' in jsonData,
+            hasUsdPrice: 'usdPrice' in jsonData,
+            keys: Object.keys(jsonData),
+            priceData: jsonData.price || jsonData.usdPrice || 'No price found',
+            dataPreview: proxyResponse.data.substring(0, 300)
+          },
+          ...jsonData
+        };
+        res.json(debugInfo);
+      } else {
+        res.json(jsonData);
+      }
     } catch (parseError) {
-      console.error('❌ Failed to parse response as JSON:', parseError);
-      res.send(proxyResponse.data);
+      // Return parse error info in response
+      res.status(500).json({
+        error: 'JSON parse failed',
+        parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+        rawData: proxyResponse.data.substring(0, 500),
+        path: apiPath,
+        originalStatus: proxyResponse.status
+      });
     }
 
   } catch (error) {
