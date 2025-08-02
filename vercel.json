@@ -6,6 +6,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/api/1inch/(.*)",
+      "destination": "/api/1inch"
+    },
+    {
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
