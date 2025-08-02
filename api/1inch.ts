@@ -1,5 +1,28 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { proxyToOneInch, type ProxyRequest } from './proxy.js';
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import { proxyToOneInch, ProxyRequest } from './proxy.js';
+
+// Helper functions for debug analysis
+function getEndpointType(apiPath: string): string {
+  if (apiPath.includes('/balance/')) return 'balance';
+  if (apiPath.includes('/token/') && apiPath.includes('/search')) return 'token-search';
+  if (apiPath.includes('/token/')) return 'token-metadata';
+  if (apiPath.includes('/swap/')) return 'swap-quote';
+  return 'unknown';
+}
+
+function analyzeDataStructure(data: any): string {
+  if (Array.isArray(data)) {
+    return `array[${data.length}]`;
+  }
+  if (typeof data === 'object' && data !== null) {
+    const keys = Object.keys(data);
+    if (keys.length === 0) return 'empty-object';
+    if (keys.every(key => key.startsWith('0x'))) return 'address-keyed-object';
+    if (data.tokens && Array.isArray(data.tokens)) return 'tokens-wrapper';
+    return `object[${keys.length}-keys]`;
+  }
+  return typeof data;
+}
 
 /**
  * Vercel API route for 1inch proxy
@@ -65,23 +88,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('X-Debug-Status', proxyResponse.status.toString());
     res.setHeader('X-Debug-Length', proxyResponse.data.length.toString());
     res.setHeader('X-Debug-Path', apiPath);
+    res.setHeader('X-Debug-Endpoint-Type', getEndpointType(apiPath));
 
     // Try to parse as JSON, fallback to text
     try {
       const jsonData = JSON.parse(proxyResponse.data);
       
-      // Add debug information for token metadata endpoints
-      if (apiPath.includes('token/v1.2') && req.query.debug === 'true') {
+      // Add debug information for ALL endpoints when debug=true
+      if (req.query.debug === 'true') {
         const debugInfo = {
           _debug: {
             originalPath: apiPath,
             responseStatus: proxyResponse.status,
             dataLength: proxyResponse.data.length,
-            hasPrice: 'price' in jsonData,
-            hasUsdPrice: 'usdPrice' in jsonData,
-            keys: Object.keys(jsonData),
-            priceData: jsonData.price || jsonData.usdPrice || 'No price found',
-            dataPreview: proxyResponse.data.substring(0, 300)
+            endpointType: getEndpointType(apiPath),
+            keys: Array.isArray(jsonData) ? ['array'] : Object.keys(jsonData),
+            dataStructure: analyzeDataStructure(jsonData),
+            dataPreview: proxyResponse.data.substring(0, 500)
           },
           ...jsonData
         };
