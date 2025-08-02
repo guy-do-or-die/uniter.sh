@@ -159,7 +159,7 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       totalTokens: filteredTokens.length,
-      message: `Scan complete: ${formatUsdValue(totalUSD)} across ${filteredTokens.length} tokens (${significantTokens.length} significant, ${mediumTokens.length} medium, ${dustTokens.length} dust)`
+      message: `Scan complete: ${filteredTokens.length} tokens valued ${formatUsdValue(totalUSD)}`
     });
 
     // Return scan results

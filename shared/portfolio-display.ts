@@ -133,10 +133,10 @@ export async function scanMultichain(
     
     output.push(
       { type: 'info', content: '' },
-      { type: 'info', content: '🌐 Multi-Chain Summary:' },
-      { type: 'info', content: `💰 Total Portfolio Value: ${formatUsdValue(totalValue)}` },
-      { type: 'info', content: `🪙 Total Tokens: ${totalTokens}` },
-      { type: 'info', content: `⛓️ Chains Scanned: ${results.length}` }
+      { type: 'info', content: '🌐  Multi-Chain Summary:' },
+      { type: 'info', content: `💰  Total Portfolio Value: ${formatUsdValue(totalValue)}` },
+      { type: 'info', content: `🪙  Total Tokens: ${totalTokens}` },
+      { type: 'info', content: `⛓️  Chains Scanned: ${results.length}` }
     );
   } else {
     output.push({

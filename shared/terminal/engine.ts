@@ -366,7 +366,7 @@ export class UnifiedTerminalEngine {
       DELIMITER,
       {
         type: 'info',
-        content: `\x1b[96m  ${uniterLink} ${envInfo} — Make tokens unit\x1b[1m\x1b[97mETH\x1b[0m\x1b[96m with ${oneInchLink}!\x1b[0m`
+        content: `\x1b[96m  ${uniterLink} ${envInfo} — Make tokens unit\x1b[1m\x1b[97mETH\x1b[0m with \x1b[96m${oneInchLink}!\x1b[0m`
       },
       {
         type: 'info',
@@ -473,7 +473,7 @@ export class UnifiedTerminalEngine {
     
     output.push({
       type: 'text',
-      content: '   \x1b[1mTab\x1b[0m                  Auto-complete commands\r\n   \x1b[1m↑/↓ Arrow Keys\x1b[0m       Browse command history\r\n   \x1b[1mCtrl+C (twice)\x1b[0m       Force quit\r\n   \x1b[1mexit, quit, or q\x1b[0m     Graceful exit\r\n'
+      content: '   \x1b[1mTab\x1b[0m                  Auto-complete commands\r\n   \x1b[1m↑/↓ Arrow Keys\x1b[0m       Browse command history\r\n   \x1b[1mCtrl+C (twice)\x1b[0m     Graceful exit\r\n       Force quit\r\n   \x1b[1mexit, quit, or q\x1b[0m'
     });
 
     if (!env.canConnectWallet) {

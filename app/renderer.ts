@@ -22,6 +22,8 @@ export class WebTerminalRenderer implements TerminalRenderer {
   private commands: string[] = ['help', 'connect', 'disconnect', 'status', 'scan', 'multichain', 'chains', 'clear', 'exit', 'quit', 'q'];
   private networkIds: string[] = [];
   private chainNames: string[] = [];
+  private lastProcessedKey: string = '';
+  private lastProcessedTime: number = 0;
 
   constructor() {
     this.fitAddon = new FitAddon();
@@ -262,6 +264,7 @@ export class WebTerminalRenderer implements TerminalRenderer {
       fontSize = 11;  // Larger phones/small tablets
     } else if (width <= 1024) {
       fontSize = 12; // Tablets
+      
     } else {
       fontSize = 13; // Desktop
     }
@@ -269,12 +272,25 @@ export class WebTerminalRenderer implements TerminalRenderer {
     this.terminal.options.fontSize = fontSize;
   }
 
-  /**
+  /**n
    * Setup xterm.js-specific event handlers
    */
   private setupXtermHandlers(): void {
     // Handle keyboard input
     this.terminal.onKey(({ key, domEvent }) => {
+      // Debug logging for mobile keyboard issues
+      const debugInfo = {
+        key: JSON.stringify(key),
+        code: domEvent.code,
+        keyCode: domEvent.keyCode,
+        which: domEvent.which,
+        type: domEvent.type,
+        isMobile: window.innerWidth < 768
+      };
+      console.log('Key event:', debugInfo);
+      
+      // Debug info logged to console only to avoid interfering with input
+      
       // Check for browser keys first - let them pass through completely
       if (this.isBrowserKey(domEvent)) {
         console.log('Browser key detected:', domEvent.code, 'letting browser handle it');
@@ -298,9 +314,28 @@ export class WebTerminalRenderer implements TerminalRenderer {
                         key === '\r' || 
                         key === '\n';
       
+      // Enhanced space key detection for mobile keyboards
+      const isSpaceKey = key === ' ' || 
+                        domEvent.keyCode === 32 || 
+                        domEvent.which === 32 || 
+                        domEvent.code === 'Space';
+      
       if (isEnterKey) {
-        domEvent.preventDefault(); // Prevent default mobile keyboard behavior
+        domEvent.preventDefault();
+        this.lastProcessedKey = '\r';
+        this.lastProcessedTime = Date.now();
         this.handleEnter();
+      } else if (isSpaceKey) {
+        domEvent.preventDefault();
+        this.lastProcessedKey = ' ';
+        this.lastProcessedTime = Date.now();
+        // Handle space directly without going through handlePrintableKey
+        const before = this.currentInput.substring(0, this.cursorPosition);
+        const after = this.currentInput.substring(this.cursorPosition);
+        this.currentInput = before + ' ' + after;
+        this.cursorPosition++;
+        this.terminal.write(' ');
+        return; // Important: return early to prevent further processing
       } else if (domEvent.code === 'Backspace') {
         this.handleBackspace();
       } else if (domEvent.code === 'Delete') {
@@ -327,12 +362,20 @@ export class WebTerminalRenderer implements TerminalRenderer {
       } else if (domEvent.ctrlKey && domEvent.code === 'KeyU') {
         this.handleClearLine();
       } else if (printable) {
+        this.lastProcessedKey = key;
+        this.lastProcessedTime = Date.now();
         this.handlePrintableKey(key);
       }
     });
     
-    // Prevent cursor from moving outside input area
+    // Mobile keyboard fallback using onData event
+    // This catches input that might not be properly handled by onKey on mobile
     this.terminal.onData((data) => {
+      const charCodes = Array.from(data).map(c => c.charCodeAt(0));
+      console.log('onData event:', JSON.stringify(data), 'charCodes:', charCodes);
+      
+      // Debug info logged to console only to avoid interfering with input
+      
       // Block certain escape sequences that could move cursor
       if (data.includes('\x1b[') && (data.includes('A') || data.includes('B') || data.includes('C') || data.includes('D'))) {
         return; // Block arrow key sequences
@@ -341,6 +384,61 @@ export class WebTerminalRenderer implements TerminalRenderer {
       // Block function key escape sequences (F1-F12)
       if (data.includes('\x1b[') && /\d+~/.test(data)) {
         return; // Block function key sequences like [15~ (F5)
+      }
+      
+      // Check if this event was already processed by onKey (within 50ms)
+      const now = Date.now();
+      const wasRecentlyProcessed = (data === this.lastProcessedKey || 
+                                   (data === '\n' && this.lastProcessedKey === '\r')) && 
+                                   (now - this.lastProcessedTime) < 50;
+      
+      if (wasRecentlyProcessed) {
+        console.log('[DEBUG] Skipping duplicate onData for:', JSON.stringify(data));
+        return; // Skip duplicate processing
+      }
+      
+      // Mobile fallback: Handle Enter and Space if they weren't caught by onKey
+      if (data === '\r' || data === '\n') {
+        console.log('Mobile fallback: Enter detected in onData');
+        console.log('[DEBUG] Processing Enter via onData fallback');
+        this.handleEnter();
+        return;
+      }
+      
+      if (data === ' ') {
+        console.log('Mobile fallback: Space detected in onData');
+        console.log('[DEBUG] Processing Space via onData fallback');
+        this.handlePrintableKey(' ');
+        return;
+      }
+      
+      // Handle multi-character strings from mobile keyboards
+      if (data.length > 1 && data.split('').every(char => char >= ' ' && char <= '~')) {
+        console.log('Mobile fallback: Multi-character string detected in onData:', JSON.stringify(data));
+        // Process each character individually
+        for (const char of data) {
+          if (char === ' ') {
+            console.log('[DEBUG] Processing space from multi-char string');
+            // Handle space directly like in onKey handler
+            const before = this.currentInput.substring(0, this.cursorPosition);
+            const after = this.currentInput.substring(this.cursorPosition);
+            this.currentInput = before + ' ' + after;
+            this.cursorPosition++;
+            this.terminal.write(' ');
+          } else {
+            console.log('[DEBUG] Processing char from multi-char string:', JSON.stringify(char));
+            this.handlePrintableKey(char);
+          }
+        }
+        return;
+      }
+      
+      // Handle single printable characters as fallback
+      if (data.length === 1 && data >= ' ' && data <= '~') {
+        console.log('Mobile fallback: Single character detected in onData:', JSON.stringify(data));
+        console.log('[DEBUG] Processing', JSON.stringify(data), 'via onData fallback');
+        this.handlePrintableKey(data);
+        return;
       }
     });
   }
@@ -413,6 +511,11 @@ export class WebTerminalRenderer implements TerminalRenderer {
     this.terminal.writeln('');
     const trimmedInput = this.currentInput.trim();
     
+    // Debug logging for mobile keyboard issues
+    console.log('Enter pressed - currentInput:', JSON.stringify(this.currentInput));
+    console.log('Enter pressed - trimmedInput:', JSON.stringify(trimmedInput));
+    console.log('Enter pressed - inputCallback exists:', !!this.inputCallback);
+    
     // Add to command history if not empty and not duplicate
     if (trimmedInput && (this.commandHistory.length === 0 || this.commandHistory[this.commandHistory.length - 1] !== trimmedInput)) {
       this.commandHistory.push(trimmedInput);
@@ -423,7 +526,10 @@ export class WebTerminalRenderer implements TerminalRenderer {
     }
     
     if (this.inputCallback) {
+      console.log('Calling inputCallback with:', JSON.stringify(trimmedInput));
       this.inputCallback(trimmedInput);
+    } else {
+      console.log('No inputCallback available!');
     }
     
     this.currentInput = '';
@@ -632,11 +738,21 @@ export class WebTerminalRenderer implements TerminalRenderer {
    * Handle printable key press
    */
   private handlePrintableKey(key: string): void {
+    // Debug space key specifically
+    if (key === ' ') {
+      console.log('[SPACE] handlePrintableKey called with space, currentInput before:', JSON.stringify(this.currentInput), 'cursorPosition:', this.cursorPosition);
+    }
+    
     // Insert character at cursor position
     const before = this.currentInput.substring(0, this.cursorPosition);
     const after = this.currentInput.substring(this.cursorPosition);
     this.currentInput = before + key + after;
     this.cursorPosition++;
+    
+    // Debug space key after processing
+    if (key === ' ') {
+      console.log('[SPACE] handlePrintableKey after processing, currentInput:', JSON.stringify(this.currentInput), 'cursorPosition:', this.cursorPosition);
+    }
     
     // If inserting in middle, redraw entire input
     if (after.length > 0) {
