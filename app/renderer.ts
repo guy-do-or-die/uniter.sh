@@ -150,24 +150,38 @@ export class WebTerminalRenderer implements TerminalRenderer {
    * Initialize the terminal in the DOM
    */
   async init(): Promise<void> {
+    console.log('🔧 WebTerminalRenderer.init() starting...');
+    
     const terminalElement = document.getElementById('terminal');
     if (!terminalElement) {
+      console.error('❌ Terminal element not found');
       throw new Error('Terminal element not found');
     }
+    console.log('✅ Terminal element found:', terminalElement);
 
     // Clear loading message
     terminalElement.innerHTML = '';
+    console.log('✅ Loading message cleared');
     
     // Open terminal
+    console.log('🔧 Opening terminal...');
     this.terminal.open(terminalElement);
+    console.log('✅ Terminal opened successfully');
     
     // Use fit addon for height calculation but maintain responsive width
+    console.log('🔧 Fitting terminal...');
     this.fitAddon.fit();
+    console.log('✅ Terminal fitted, rows:', this.terminal.rows, 'cols:', this.terminal.cols);
+    
     // Override the width to maintain fixed columns for ANSI art
+    console.log('🔧 Resizing to 120 columns...');
     this.terminal.resize(120, this.terminal.rows);
-  
+    console.log('✅ Terminal resized to 120x' + this.terminal.rows);
+
     // Auto-focus the terminal for immediate input
+    console.log('🔧 Focusing terminal...');
     this.terminal.focus();
+    console.log('✅ Terminal focused');
     
     // Setup scrollbar visibility control
     this.setupScrollbarVisibilityControl(terminalElement);
@@ -219,6 +233,8 @@ export class WebTerminalRenderer implements TerminalRenderer {
       // Override width to maintain 120 columns for ANSI art
       this.terminal.resize(120, this.terminal.rows);
     });
+    
+    console.log('🎉 WebTerminalRenderer.init() completed successfully!');
   }
 
   /**

@@ -1,5 +1,4 @@
 import { defineConfig, loadEnv } from 'vite';
-import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => {
   // Load env vars from .env file
@@ -11,7 +10,6 @@ export default defineConfig(({ mode }) => {
   return {
     root: './app',
     publicDir: '../public',
-    envDir: resolve(__dirname),
     build: {
       outDir: '../dist-web',
       emptyOutDir: true,
@@ -25,6 +23,12 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: true,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
       allowedHosts: [
         'localhost',
         '127.0.0.1',
@@ -36,26 +40,6 @@ export default defineConfig(({ mode }) => {
       ],
       headers: {
         'ngrok-skip-browser-warning': 'true'
-      },
-      proxy: {
-        '/api/1inch': {
-          target: 'https://api.1inch.dev',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/1inch/, ''),
-          configure: (proxy, _options) => {
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              // Add API key header
-              const apiKey = process.env.ONEINCH_API_KEY;
-              if (apiKey) {
-                proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
-              }
-              console.log(`[PROXY] ${req.method} ${req.url} -> ${proxyReq.getHeader('host')}${proxyReq.path}`);
-            });
-            proxy.on('proxyRes', (proxyRes, req, res) => {
-              console.log(`[PROXY] ${proxyRes.statusCode} ${req.url}`);
-            });
-          }
-        }
       }
     },
   };

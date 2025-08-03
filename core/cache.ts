@@ -5,9 +5,9 @@
  * - Simple key-value interface for all data types
  */
 
-// Environment detection
-const isVercelProduction = process.env.VERCEL_ENV === 'production';
-const isVercelPreview = process.env.VERCEL_ENV === 'preview';
+// Environment detection - safe for both browser and Node.js
+const isVercelProduction = typeof process !== 'undefined' && process.env?.VERCEL_ENV === 'production';
+const isVercelPreview = typeof process !== 'undefined' && process.env?.VERCEL_ENV === 'preview';
 const isVercelEnvironment = isVercelProduction || isVercelPreview;
 
 // In-memory cache for local development

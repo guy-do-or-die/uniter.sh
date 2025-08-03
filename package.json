@@ -8,14 +8,12 @@
     "uniter.sh": "./dist/cli/cli.js"
   },
   "scripts": {
-    "build": "tsc",
     "build:web": "vite build",
-    "dev": "bun run cli/cli.ts",
-    "dev:web": "bunx vercel dev",
-    "dev:vite": "vite",
-    "start": "bun run cli/cli.ts",
+    "build": "tsc && bun run build:web",
+    "dev:cli": "bun run cli/cli.ts",
+    "dev:web": "vite",
     "start:web": "vite preview",
-    "uniter": "bun run cli/cli.ts",
+    "start:cli": "bun run cli/cli.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest",

@@ -6,12 +6,9 @@
 
 import { createPublicClient, http } from 'viem';
 import { mainnet } from 'viem/chains';
-import { ApiImplementation } from './types.js';
 import { 
   getCachedUsdcAddress, 
-  setCachedUsdcAddress, 
-  isSearchRecentlyFailed, 
-  markSearchAsFailed 
+  setCachedUsdcAddress 
 } from './cache.js';
 
 // Environment detection
@@ -56,10 +53,10 @@ console.log(`🌍 DEBUG: Environment detection - isBrowser: ${isBrowser}, isNode
  */
 function getApiUrl(endpoint: string): string {
   if (isBrowser) {
-    // Use Vite dev proxy in browser (no API key needed, handled by proxy)
-    const proxiedUrl = `${VITE_PROXY_BASE}${endpoint}`;
-    console.log(`🌐 DEBUG: Browser environment - using Vite proxy: ${proxiedUrl}`);
-    return proxiedUrl;
+    // Use direct path routing for browser environment (proxied through Vite)
+    const apiUrl = `${VITE_PROXY_BASE}${endpoint}`;
+    console.log(`🌐 DEBUG: Browser environment - using API endpoint: ${apiUrl}`);
+    return apiUrl;
   } else {
     // Direct access in Node.js
     const fullUrl = `${ONEINCH_BASE_URL}${endpoint}`;
@@ -174,13 +171,16 @@ async function makeOneInchRequest<T>(
     const url = getApiUrl(endpoint);
     
     try {
-      // Build headers conditionally - Vite proxy handles auth in browser
+      // Build headers conditionally - API endpoint handles auth in browser
       const headers: Record<string, string> = {
         'Accept': 'application/json',
       };
       
       if (isNode && apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
+        headers['User-Agent'] = 'uniter.sh/1.0';
+        headers['Cache-Control'] = 'no-cache';
+        headers['Pragma'] = 'no-cache';
       }
       
       const response = await fetch(url, { headers });

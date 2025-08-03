@@ -1,5 +1,9 @@
+console.log('🚀 main.ts loading...');
+
 import { WebTerminalRenderer } from './terminal.js';
 import { miniapp } from './miniapp.js';
+
+console.log('✅ main.ts imports loaded successfully');
 
 /**
  * Initialize the web terminal application

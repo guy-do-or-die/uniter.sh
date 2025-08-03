@@ -1,73 +1,69 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { proxyToOneInch, type ProxyRequest } from '../proxy';
+export const config = {
+    runtime: 'edge',
+};
 
-/**
- * Vercel API route for 1inch proxy
- * Handles both development and production requests
- */
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  try {
-    // Validate API key
-    const apiKey = process.env.ONEINCH_API_KEY;
-    if (!apiKey) {
-      const availableKeys = Object.keys(process.env).filter(k => k.includes('ONEINCH'));
-      console.error('❌ ONEINCH_API_KEY not found in Vercel API route');
-      console.error('Available ONEINCH env vars:', availableKeys);
-      return res.status(500).json({ error: 'API key not configured' });
-    }
-    
-    console.log(`✅ API key found in Vercel API route, length: ${apiKey.length}`);
-
-    // Extract the path from the request
-    const { path } = req.query;
-    if (!path || !Array.isArray(path)) {
-      return res.status(400).json({ error: 'Invalid path' });
-    }
-
-    // Build proxy request
-    const proxyRequest: ProxyRequest = {
-      url: `/api/1inch/${path.join('/')}`,
-      method: req.method || 'GET',
-      body: req.body,
-      query: Object.fromEntries(
-        Object.entries(req.query).filter(([key]) => key !== 'path')
-      )
-    };
-
-    // Use proxy utilities
-    const proxyResponse = await proxyToOneInch(proxyRequest, apiKey, {
-      logPrefix: '🚀 Vercel'
-    });
-
-    // Set response headers
-    res.status(proxyResponse.status);
-    res.setHeader('Content-Type', proxyResponse.headers['content-type'] || 'application/json');
-
-    // Try to parse as JSON, fallback to text
+export default async function handler(req: Request) {
     try {
-      const jsonData = JSON.parse(proxyResponse.data);
-      res.json(jsonData);
-    } catch (parseError) {
-      console.error('❌ Failed to parse response as JSON:', parseError);
-      res.send(proxyResponse.data);
-    }
+        const url = new URL(req.url);
+        
+        // Extract the API path from the URL pathname
+        // The URL will be like: /api/1inch/token/v1.3/130/search
+        // We want to extract: /token/v1.3/130/search
+        const fullPath = url.pathname;
+        const apiPath = fullPath.replace('/api/1inch', '') || '/';
+        
+        // Build the 1inch API URL
+        const oneinchUrl = `https://api.1inch.dev${apiPath}${url.search}`;
+        
 
-  } catch (error) {
-    console.error('Vercel proxy error:', error);
-    res.status(500).json({ 
-      error: 'Proxy request failed',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
+        // Get API key from environment
+        const apiKey = process.env.ONEINCH_API_KEY;
+        if (!apiKey) {
+            return new Response(
+                JSON.stringify({ error: 'API key not configured' }),
+                { status: 500, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
+        
+        // Forward the request to 1inch API
+        const response = await fetch(oneinchUrl, {
+            method: req.method,
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: req.method !== 'GET' ? await req.text() : undefined,
+        });
+        
+        // Get response data
+        const data = await response.text();
+        
+        // Return the response with CORS headers
+        return new Response(data, {
+            status: response.status,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            },
+        });
+        
+    } catch (error) {
+        console.error('API proxy error:', error);
+        return new Response(
+            JSON.stringify({ 
+                error: 'API request failed',
+                details: error instanceof Error ? error.message : String(error)
+            }),
+            { 
+                status: 500, 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                }
+            }
+        );
+    }
 }
