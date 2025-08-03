@@ -6,6 +6,13 @@
 
 import { createPublicClient, http } from 'viem';
 import { mainnet } from 'viem/chains';
+import { ApiImplementation } from './types.js';
+import { 
+  getCachedUsdcAddress, 
+  setCachedUsdcAddress, 
+  isSearchRecentlyFailed, 
+  markSearchAsFailed 
+} from './cache.js';
 
 // Environment detection
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
@@ -94,6 +101,14 @@ function clearUsdcCache(chainId?: number) {
     Object.keys(USDC_ADDRESS_CACHE).forEach(key => delete USDC_ADDRESS_CACHE[parseInt(key)]);
     console.log(`🗑️ DEBUG: Cleared all USDC cache`);
   }
+}
+
+// Request-level cache for USDC addresses (prevents duplicate API calls within same request)
+const REQUEST_USDC_CACHE: Record<number, string | null | Promise<string | null>> = {};
+
+// Clear request cache (call this at start of each major operation)
+export function clearRequestUsdcCache() {
+  Object.keys(REQUEST_USDC_CACHE).forEach(key => delete REQUEST_USDC_CACHE[parseInt(key)]);
 }
 
 // API response types
@@ -229,27 +244,25 @@ async function queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
 /**
  * Dynamically find USDC address on a given chain using 1inch search API
  */
-export async function findUsdcAddress(
-  chainId: number,
-  apiKey: string,
-  fetch: typeof globalThis.fetch
-): Promise<string | null> {
-  console.log(`🔍 DEBUG: findUsdcAddress called for chain ${chainId}`);
+export async function findUsdcAddress(chainId: number, apiKey: string): Promise<string | null> {
+  console.log(`🔍 Finding USDC address for chain ${chainId}`);
   
-  // Clear invalid cache entries (temporary debug fix)
-  if (USDC_ADDRESS_CACHE[chainId]?.address === '0' || USDC_ADDRESS_CACHE[chainId]?.address === null) {
-    clearUsdcCache(chainId);
+  // Check persistent cache first
+  const cached = await getCachedUsdcAddress(chainId);
+  if (cached !== null) {
+    console.log(`✅ Using cached USDC address for chain ${chainId}: ${cached}`);
+    return cached;
   }
-  
-  // Check cache first
-  const cached = USDC_ADDRESS_CACHE[chainId];
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    if (cached.address === 'NOT_FOUND') {
-      console.log(`⏳ USDC search recently failed for chain ${chainId}, skipping retry`);
-      return null;
+
+  // Check request-level cache first (prevents duplicate calls within same request)
+  const cachedRequest = REQUEST_USDC_CACHE[chainId];
+  if (cachedRequest !== undefined) {
+    if (cachedRequest instanceof Promise) {
+      console.log(`⏳ USDC search in progress for chain ${chainId}, waiting...`);
+      return await cachedRequest;
     }
-    console.log(`✅ Using cached USDC address for chain ${chainId}: ${cached.address}`);
-    return cached.address;
+    console.log(`✅ Using request-cached USDC address for chain ${chainId}: ${cachedRequest}`);
+    return cachedRequest;
   }
   
   console.log(`🔍 DEBUG: No cache found, searching for USDC on chain ${chainId}...`);
@@ -275,21 +288,15 @@ export async function findUsdcAddress(
       
       if (token.symbol === 'USDC' && token.decimals === 6) {
         console.log(`✅ Found valid USDC on chain ${chainId}: ${token.address}`);
-        // Cache the result
-        USDC_ADDRESS_CACHE[chainId] = {
-          address: token.address,
-          timestamp: Date.now()
-        };
+        // Cache the result persistently
+        await setCachedUsdcAddress(chainId, token.address);
+        // Also cache in request-level cache
+        REQUEST_USDC_CACHE[chainId] = token.address;
         return token.address;
       }
     }
 
-    console.warn(`No USDC token found on chain ${chainId}`);
-    // Cache null results temporarily to prevent API spam (5 minute cooldown)
-    USDC_ADDRESS_CACHE[chainId] = {
-      address: 'NOT_FOUND',
-      timestamp: Date.now()
-    };
+    console.warn(`No USDC token found via search API on chain ${chainId}`);
     return null;
   } catch (error) {
     console.warn(`Error searching for USDC on chain ${chainId}:`, (error as Error).message);

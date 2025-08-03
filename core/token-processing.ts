@@ -85,7 +85,7 @@ async function calculateTokenUsdValue(
     const quoteAmount = quoteAmountWei.toString(); // 1inch API expects wei amount as string
     
     // Get USDC address for this chain
-    const usdcAddress = await api.findUsdcAddress(chainId, apiKey, fetch);
+    const usdcAddress = await api.findUsdcAddress(chainId, apiKey);
     if (!usdcAddress || usdcAddress === '0') {
       console.warn(`No USDC address found for chain ${chainId}`);
       return 0;
