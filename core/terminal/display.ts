@@ -209,7 +209,8 @@ export function generateTokenScanOutput(scanResult: TokenScanResult): TerminalOu
     type: 'info',
     content: `Dust Tokens: \x1b[90m${scanResult.dustTokens.length}\x1b[0m`
   });
-  
+
+ 
   // Display dust tokens first (most important for uniter.sh use case)
   if (scanResult.dustTokens && scanResult.dustTokens.length > 0) {
     output.push({

@@ -92,13 +92,7 @@ export class WebAdapter implements EnvironmentAdapter {
       chainId: 0, // Not used for multi-chain scan
       client: null, // Not needed for web environment
       topic: '', // Not needed for web environment
-      isDemo: session.isDemo || false // Pass through demo mode flag
     };
-    
-    // Check if this is a demo session
-    if (session.isDemo) {
-      console.log('Running in demo mode with address:', session.address);
-    }
     
     // Use unified multi-chain scanner with progress callback
     const { results } = await scanMultichain(walletSession, apiKey, browserConfig.defaultMinUsdValue || 5, onProgress);

@@ -129,6 +129,20 @@ export interface OneInchQuoteResponse {
   gas: string;
 }
 
+export interface OneInchSwapResponse {
+  dstAmount: string;
+  srcAmount: string;
+  tx: {
+    from: string;
+    to: string;
+    data: string;
+    value: string;
+    gasPrice: string;
+    gas: string;
+  };
+  protocols: any[];
+}
+
 export interface OneInchSearchResponse {
   symbol: string;
   chainId: number;
@@ -194,9 +208,15 @@ async function makeOneInchRequest<T>(
 
       if (!response.ok) {
         if (response.status === 400) {
+          const errorText = await response.text();
+
+          if (errorText.includes('insufficient liquidity')) {
+            console.error(`⚠️  ${description} failed: ${response.status} (likely insufficient liquidity or unsupported token)`);
+            console.error(`🔍 DEBUG: Error response body:`, errorText);
+            throw new Error(`1inch API 400 error: ${response.statusText}`);
+          }
           // 400 errors are permanent - don't retry
           console.error(`⚠️  ${description} failed: ${response.status} (likely insufficient liquidity or unsupported token)`);
-          const errorText = await response.text();
           console.error(`🔍 DEBUG: Error response body:`, errorText);
           throw new Error(`1inch API 400 error: ${response.statusText}`);
         } else if (response.status === 429 && retryCount < maxRetries) {
@@ -286,7 +306,7 @@ export async function findUsdcAddress(chainId: number, apiKey: string): Promise<
         continue;
       }
       
-      if (token.symbol === 'USDC' && token.decimals === 6) {
+      if (token.symbol.includes('USDC') && token.decimals === 6) {
         console.log(`✅ Found valid USDC on chain ${chainId}: ${token.address}`);
         // Cache the result persistently
         await setCachedUsdcAddress(chainId, token.address);
@@ -507,6 +527,162 @@ export async function getQuote(
     if (error instanceof Error && error.message.includes('400')) {
       console.error(`⚠️  Token quote not available for ${fromTokenAddress} on chain ${chainId}`);
     }
+    return null;
+  }
+}
+
+/**
+ * Get swap transaction data from 1inch API
+ * Platform-agnostic version that takes API key as parameter
+ * Uses the working v6.0 API with graceful error handling
+ */
+export async function getSwap(
+  chainId: number,
+  fromTokenAddress: string,
+  toTokenAddress: string,
+  amount: string,
+  fromAddress: string,
+  slippage: number = 1, // 1% default slippage
+  apiKey: string
+): Promise<OneInchSwapResponse | null> {
+  try {
+    const result = await makeOneInchRequest<OneInchSwapResponse>(
+      `/swap/v6.0/${chainId}/swap?src=${fromTokenAddress}&dst=${toTokenAddress}&amount=${amount}&from=${fromAddress}&slippage=${slippage}`,
+      apiKey,
+      { description: `Swap ${fromTokenAddress} to ${toTokenAddress} on chain ${chainId}` }
+    );
+    
+    // Log specific swap details
+    console.log(`🔄 DEBUG: Swap response for ${fromTokenAddress} -> ${toTokenAddress}:`, {
+      dstAmount: result.dstAmount,
+      srcAmount: result.srcAmount,
+      gasEstimate: result.tx?.gas,
+      hasTransaction: !!result.tx
+    });
+    
+    return result;
+  } catch (error) {
+    // Graceful failure for swap requests - return null instead of throwing
+    // This allows the sweep to continue even if some tokens can't be swapped
+    console.error(`❌ Swap failed for ${fromTokenAddress} -> ${toTokenAddress} on chain ${chainId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Check if a token can be swapped (has sufficient liquidity)
+ * Uses quote endpoint to verify swap is possible
+ */
+export async function canSwapToken(
+  chainId: number,
+  fromTokenAddress: string,
+  toTokenAddress: string,
+  amount: string,
+  apiKey: string
+): Promise<boolean> {
+  try {
+    const quote = await getQuote(chainId, fromTokenAddress, toTokenAddress, amount, apiKey);
+    return quote !== null && !!quote.dstAmount && parseFloat(quote.dstAmount) > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Get the 1inch spender address for a specific chain
+ * Returns the router contract address that should be approved for token spending
+ */
+export async function getSpenderAddress(
+  chainId: number,
+  apiKey: string
+): Promise<string | null> {
+  try {
+    const result = await makeOneInchRequest<{ address: string }>(
+      `/swap/v6.0/${chainId}/approve/spender`,
+      apiKey,
+      { description: `Get spender address for chain ${chainId}` }
+    );
+    
+    console.log(`🏦 DEBUG: Spender address for chain ${chainId}: ${result.address}`);
+    return result.address;
+  } catch (error) {
+    console.error(`❌ Failed to get spender address for chain ${chainId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Get approve transaction data from 1inch API
+ * Returns the transaction data needed to approve a token for swapping
+ */
+export async function getApproveTransaction(
+  chainId: number,
+  tokenAddress: string,
+  amount: string,
+  apiKey: string
+): Promise<{ to: string; data: string; value: string; gasPrice: string; gas: string } | null> {
+  try {
+    // Use the correct 1inch approve/transaction endpoint format
+    const result = await makeOneInchRequest<{
+      data: string;
+      gasPrice: string;
+      to: string;
+      value: string;
+    }>(
+      `/swap/v6.1/${chainId}/approve/transaction?tokenAddress=${tokenAddress}&amount=${amount}`,
+      apiKey,
+      { description: `Allowance transaction for ${tokenAddress} (${amount}) on chain ${chainId}` }
+    );
+    
+    console.log(`🔐 DEBUG: Allowance transaction for ${tokenAddress}:`, {
+      to: result.to,
+      hasData: !!result.data,
+      gasPrice: result.gasPrice,
+      value: result.value
+    });
+    
+    // Return the transaction data as-is from 1inch API
+    // The API already returns the correct spender address in the 'to' field
+    return {
+      to: result.to,
+      data: result.data,
+      value: result.value,
+      gasPrice: result.gasPrice,
+      gas: '100000' // Default gas limit for approve transactions
+    };
+  } catch (error) {
+    console.error(`❌ Allowance transaction failed for ${tokenAddress} on chain ${chainId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Check current allowance for a token
+ * Returns the current allowance amount
+ */
+export async function getCurrentAllowance(
+  chainId: number,
+  tokenAddress: string,
+  walletAddress: string,
+  apiKey: string
+): Promise<string | null> {
+  try {
+    const result = await makeOneInchRequest<{
+      allowance: string;
+    }>(
+      `/swap/v6.1/${chainId}/approve/allowance?tokenAddress=${tokenAddress}&walletAddress=${walletAddress}`,
+      apiKey,
+      { description: `Check allowance for ${tokenAddress} on chain ${chainId}` }
+    );
+    
+    console.log(`🔍 DEBUG: Current allowance for ${tokenAddress}:`, {
+      allowance: result.allowance,
+      walletAddress: walletAddress
+    });
+    
+    return result.allowance;
+  } catch (error) {
+    console.error(`❌ Allowance check failed for ${tokenAddress} on chain ${chainId}:`, error);
     return null;
   }
 }

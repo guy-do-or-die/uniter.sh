@@ -45,7 +45,12 @@ export async function unifiedScan(
     getWalletBalances: defaultApi.getWalletBalances,
     getTokenMetadata: defaultApi.getTokenMetadata,
     getQuote: defaultApi.getQuote,
-    findUsdcAddress: defaultApi.findUsdcAddress
+    findUsdcAddress: defaultApi.findUsdcAddress,
+    getSwap: defaultApi.getSwap,
+    canSwapToken: defaultApi.canSwapToken,
+    getApproveTransaction: defaultApi.getApproveTransaction,
+    getCurrentAllowance: defaultApi.getCurrentAllowance,
+    getSpenderAddress: defaultApi.getSpenderAddress
   };
 
   // Suppress console output during scan
@@ -76,6 +81,45 @@ export async function unifiedScan(
   }
 }
 
+
+export function aggregatedResult(dustThresholdUsd: number, results: TokenScanResult[]): TokenScanResult {
+  const allTokensAggregated: any[] = [];
+  let totalValue = 0;
+  
+  results.forEach(result => {
+    // Add chain identifier to each token for reference
+    const tokensWithChain = result.allTokens.map(token => ({
+      ...token,
+      chainName: result.chainName,
+      chainId: result.chainId
+    }));
+    allTokensAggregated.push(...tokensWithChain);
+    totalValue += result.totalUSD;
+  });
+  
+  // Sort all tokens by USD value (descending)
+  allTokensAggregated.sort((a, b) => (b.balanceUSD || b.usdValue || 0) - (a.balanceUSD || a.usdValue || 0));
+  
+  // Create aggregated scan result for unified categorized display
+  const aggregatedResult: TokenScanResult = {
+    tokens: allTokensAggregated,
+    nativeTokens: allTokensAggregated.filter(t => t.isNative),
+    allTokens: allTokensAggregated,
+    dustTokens: allTokensAggregated.filter(t => (t.balanceUSD || t.usdValue || 0) < dustThresholdUsd),
+    mediumTokens: allTokensAggregated.filter(t => {
+      const value = t.balanceUSD || t.usdValue || 0;
+      return value >= dustThresholdUsd && value < 100;
+    }),
+    significantTokens: allTokensAggregated.filter(t => (t.balanceUSD || t.usdValue || 0) >= 100),
+    totalUSD: totalValue,
+    chainId: 0, // Multi-chain
+    chainName: 'Multi-Chain Portfolio'
+  }; 
+
+  return aggregatedResult;
+}
+
+
 /**
  * Unified multi-chain scan with formatted output
  * Orchestrates multi-chain scanning and provides formatted output for display
@@ -87,20 +131,9 @@ export async function scanMultichain(
   onProgress?: (progress: any) => void
 ): Promise<MultiChainScanResult> {
   const results: TokenScanResult[] = [];
-  const output: OutputItem[] = [];
-  
-  output.push({
-    type: 'info',
-    content: '🌐 Starting multi-chain token scan...'
-  });
-  
+ 
   for (const chain of getSupportedChains()) {
     try {
-      output.push({
-        type: 'info',
-        content: `🔄 Scanning ${chain.name} (${chain.id})...`
-      });
-      
       const chainSession: WalletSession = {
         ...session,
         chainId: chain.id
@@ -110,42 +143,21 @@ export async function scanMultichain(
       
       if (result.allTokens.length > 0) {
         results.push(result);
-        const chainOutput = generateTokenScanOutput(result);
-        output.push(...chainOutput);
-      } else {
-        output.push({
-          type: 'info',
-          content: `ℹ️ No tokens found on ${chain.name}`
-        });
-      }
+      } 
     } catch (error) {
-      output.push({
-        type: 'error',
-        content: `❌ Error scanning ${chain.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
-      });
+      console.log(error)
     }
   }
-  
-  // Add multi-chain summary
-  if (results.length > 0) {
-    const totalValue = results.reduce((sum, r) => sum + r.totalUSD, 0);
-    const totalTokens = results.reduce((sum, r) => sum + r.allTokens.length, 0);
-    
-    output.push(
-      { type: 'info', content: '' },
-      { type: 'info', content: '🌐  Multi-Chain Summary:' },
-      { type: 'info', content: `💰  Total Portfolio Value: ${formatUsdValue(totalValue)}` },
-      { type: 'info', content: `🪙  Total Tokens: ${totalTokens}` },
-      { type: 'info', content: `⛓️  Chains Scanned: ${results.length}` }
-    );
+
+  // Aggregate all tokens from all chains into unified summary
+  if (results.length > 0) {    
+    // Add chain breakdown summary at the end
+    console.log(`⛓️  Scanned ${results.length} chains successfully`);
   } else {
-    output.push({
-      type: 'error',
-      content: '❌ No chains scanned successfully'
-    });
+    console.log('❌ No chains scanned successfully');
   }
   
-  return { results, output };
+  return { results, output: [] };
 }
 
 /**

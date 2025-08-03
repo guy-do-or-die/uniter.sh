@@ -1,12 +1,18 @@
 import { getChainId, getChainName, getNetworkIdentifier, getSupportedChains } from '../chains.js';
 import { generateTokenScanOutput, formatUsdValue } from './display.js';
 import { formatAddressWithEns, formatAddressWithEnsForConnection } from '../api.js';
+import { executeSweep, formatSweepResults } from '../sweep.js';
+import { hasRecentScanResults, getScanResultsSummary } from '../scan-storage.js';
+
+import { aggregatedResult } from '../portfolio-display.js';
+
 import chalk from 'chalk';
 
 import { logoData } from './logo.js';
 
 import type { TerminalOutput, TerminalCommand, EnvironmentAdapter, TerminalRenderer, TerminalEnvironment } from './types.js';
 import type { ScanProgress } from '../types.js';
+import type { SweepProgress } from '../sweep.js';
 
 
 
@@ -226,10 +232,29 @@ export class UnifiedTerminalEngine {
         handler: this.handleMultichain.bind(this)
       },
       {
+        name: 'sweep',
+        description: 'Swap all dust tokens to native tokens',
+        aliases: ['sw'],
+        handler: this.handleSweep.bind(this)
+      },
+      {
+        name: 'unite',
+        description: 'Unive collected ETH to a chain of choice',
+        aliases: ['u'],
+        args: ['[chain]'],
+        handler: this.handleUnite.bind(this)
+      },
+      {
         name: 'chains',
         aliases: ['ch'],
         description: 'List supported chains',
         handler: this.handleChains.bind(this)
+      },
+      {
+        name: 'key',
+        aliases: ['k'],
+        description: 'Set API key',
+        handler: this.handleKey.bind(this)
       },
       {
         name: 'clear',
@@ -462,7 +487,7 @@ export class UnifiedTerminalEngine {
     
     output.push({
       type: 'text',
-      content: '   \x1b[1mconnect\x1b[0m              Connect your wallet\r\n   \x1b[1mscan base\x1b[0m            Scan tokens on Base\r\n   \x1b[1mmultichain\x1b[0m           Scan all supported chains\r\n   \x1b[1mstatus\x1b[0m               Check connection status\r\n'
+      content: '   \x1b[1mconnect\x1b[0m              Connect your wallet\r\n   \x1b[1mscan base\x1b[0m            Scan tokens on Base\r\n   \x1b[1mmultichain\x1b[0m           Scan all supported chains\r\n   \x1b[1msweep --dry-run\x1b[0m      Simulate swapping dust tokens\r\n   \x1b[1mstatus\x1b[0m               Check connection status\r\n'
     });
 
     // Navigation tips
@@ -641,6 +666,7 @@ export class UnifiedTerminalEngine {
     }
   }
 
+  
   private async handleScan(args: string[]): Promise<TerminalOutput[]> {
     const env = this.adapter.getEnvironment();
     
@@ -736,6 +762,7 @@ export class UnifiedTerminalEngine {
     }
 
     try {
+
       // Display logo and loading message
       if (this.renderer) {
         const colors = this.getTerminalColors();
@@ -762,7 +789,7 @@ export class UnifiedTerminalEngine {
 
       // Get scan results from adapter with progress callback
       const results = await this.adapter.scanTokensMultiChain(session, onProgress);
-      
+
       // Clear progress display
       if (this.renderer) {
         this.renderer.clearProgress();
@@ -770,20 +797,14 @@ export class UnifiedTerminalEngine {
       
       // Display results for each chain line by line
       if (results && results.length > 0) {
-        results.forEach((result: any) => {
-          // Display chain header immediately
+        const aggregated = aggregatedResult(5, results);
+        const output = generateTokenScanOutput(aggregated);
+
+        for (const item of output) {
           if (this.renderer) {
-            this.renderer.writeln(`\n🔗 ${result.chainName || 'Chain ' + result.chainId} Results:`);
+            this.renderer.writeln(item.content);
           }
-          
-          // Display chain results line by line
-          const displayOutput = generateTokenScanOutput(result);
-          if (this.renderer) {
-            displayOutput.forEach(item => {
-              this.renderer!.writeln(item.content);
-            });
-          }
-        });
+        }
         
         // Display multi-chain summary line by line
         const totalValue = results.reduce((sum: number, r: any) => sum + (r.totalUSD || 0), 0);
@@ -848,6 +869,122 @@ export class UnifiedTerminalEngine {
     return [{
       type: 'text',
       content: '\x1b[2J\x1b[H' // ANSI clear screen
+    }];
+  }
+
+  private async handleSweep(args: string[]): Promise<TerminalOutput[]> {
+    try {
+      // Check if wallet is connected
+      if (!this.adapter.isWalletConnected()) {
+        return [{
+          type: 'error',
+          content: 'No wallet connected. Use "connect" command first.'
+        }];
+      }
+
+      const session = this.adapter.getCurrentSession();
+      if (!session) {
+        return [{
+          type: 'error',
+          content: 'No active session. Please connect your wallet first.'
+        }];
+      }
+
+      // Check for recent scan results
+      if (!hasRecentScanResults()) {
+        return [{
+          type: 'error',
+          content: 'No recent scan results found. Please run "scan" or "multichain" command first.'
+        }];
+      }
+
+      // Get scan summary
+      const summary = getScanResultsSummary();
+      if (!summary || summary.totalDustTokens === 0) {
+        return [{
+          type: 'info',
+          content: 'No dust tokens found to sweep.'
+        }];
+      }
+
+      const output: TerminalOutput[] = [];
+      
+      // Display sweep info
+      output.push({
+        type: 'info',
+        content: formatForEnvironment(`🧹 Preparing token sweep...`)
+      });
+      
+      output.push({
+        type: 'info', 
+        content: formatForEnvironment(`Found ${summary.totalDustTokens} dust tokens across ${summary.totalChains} chains`)
+      });
+
+      // Create progress callback for interactive updates
+      const onProgress = (progress: SweepProgress) => {
+        if (this.renderer) {
+          if (progress.phase === 'starting' || progress.phase === 'complete') {
+            // Major phases: display immediately as permanent output
+            this.renderer.clearProgress();
+            const colorizedMessage = this.colorizeProgressMessage(progress.message);
+            this.renderer.writeln(colorizedMessage);
+          } else {
+            // Individual token processing: show as in-place updates
+            const colorizedMessage = this.colorizeProgressMessage(progress.message);
+            this.renderer.updateProgress(colorizedMessage);
+          }
+        }
+      };
+
+      // Execute sweep
+      const sweepResult = await executeSweep(session, onProgress, undefined);
+      
+      // Clear progress display
+      if (this.renderer) {
+        this.renderer.clearProgress();
+      }
+      
+      // Display results
+      const resultOutput = formatSweepResults(sweepResult);
+      resultOutput.forEach(line => {
+        if (this.renderer) {
+          this.renderer.writeln(formatForEnvironment(line));
+        }
+      });
+      
+      if (sweepResult.success) {
+        output.push({
+          type: 'success',
+          content: formatForEnvironment(`✅ Sweep completed successfully!`)
+        });
+      } else {
+        output.push({
+          type: 'error',
+          content: formatForEnvironment('❌ Sweep failed - no tokens could be processed')
+        });
+      }
+
+      return output;
+      
+    } catch (error) {
+      return [{
+        type: 'error',
+        content: `Sweep failed: ${error instanceof Error ? error.message : String(error)}`
+      }];
+    }
+  }
+
+  private async handleUnite(args: string[]): Promise<TerminalOutput[]> {
+    return [{
+      type: 'info',
+      content: 'Sweeping all dust tokens to native tokens with Fusion+'
+    }];
+  }
+
+  private async handleKey(args: string[]): Promise<TerminalOutput[]> {
+    return [{
+      type: 'info',
+      content: 'Setting API key...'
     }];
   }
 

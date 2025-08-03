@@ -3,7 +3,7 @@
  * Single responsibility: Process token balances, calculate USD values, filter and categorize tokens
  */
 
-import { formatUnits, parseUnits } from 'viem';
+import { formatUnits, parseUnits, zeroAddress } from 'viem';
 import { formatUsdValue } from './terminal/display.js';
 import { OneInchBalanceResponse, OneInchTokenMetadata, NATIVE_TOKEN_ADDRESS } from './api.js';
 import type { 
@@ -75,30 +75,25 @@ async function calculateTokenUsdValue(
   tokenAddress: string,
   tokenBalance: string,
   tokenDecimals: number,
+  usdcAddress: string,
   chainId: number,
   apiKey: string,
   api: ApiImplementation
 ): Promise<number> {
   try {
     // Use a small amount for quoting to avoid slippage issues (0.01 tokens in wei)
-    const quoteAmountWei = parseUnits('0.01', tokenDecimals); // Use viem's parseUnits for proper wei conversion
+    const quoteAmountWei = BigInt(tokenBalance); // parseUnits(tokenBalance, tokenDecimals); // Use viem's parseUnits for proper wei conversion
     const quoteAmount = quoteAmountWei.toString(); // 1inch API expects wei amount as string
-    
-    // Get USDC address for this chain
-    const usdcAddress = await api.findUsdcAddress(chainId, apiKey);
-    if (!usdcAddress || usdcAddress === '0') {
-      console.warn(`No USDC address found for chain ${chainId}`);
-      return 0;
-    }
-    
+
+    console.log({chainId, tokenAddress, usdcAddress, quoteAmount, apiKey}); 
     // Get quote from token to USDC
     const quote = await api.getQuote(chainId, tokenAddress, usdcAddress, quoteAmount, apiKey);
-    
-    if (!quote || !quote.dstAmount) {
+
+    if (!quote || !quote.dstAmount || BigInt(quote.dstAmount) > 10e18) {
       console.warn(`No quote received for token ${tokenAddress} on chain ${chainId}`);
       return 0;
     }
-    
+
     // Calculate USD value per token
     const quoteAmountNum = parseFloat(formatUnits(quoteAmountWei, tokenDecimals)); // Convert wei back to decimal for calculation
     const usdValuePerToken = parseFloat(formatUnits(BigInt(quote.dstAmount), 6)) / quoteAmountNum; // USDC has 6 decimals
@@ -144,6 +139,14 @@ export async function processTokenBalances(
   const tokenEntries = Object.entries(balanceData);
   const totalTokens = tokenEntries.length;
   
+  // Get USDC address for this chain
+  const usdcAddress = await api.findUsdcAddress(chainId, apiKey);
+
+  if (!usdcAddress || usdcAddress === '0') {
+    console.warn(`No USDC address found for chain ${chainId}`);
+    return [];
+  }
+ 
   for (let i = 0; i < tokenEntries.length; i++) {
     const [address, balance] = tokenEntries[i];
     const metadata = tokenMetadata[address.toLowerCase()];
@@ -162,17 +165,18 @@ export async function processTokenBalances(
       // Use viem for reliable token value parsing
       const balanceNum = parseFloat(formatUnits(BigInt(balance), metadata.decimals));
       const balanceFormatted = formatUnits(BigInt(balance), metadata.decimals);
-      
+     
       // Calculate USD value
-      const balanceUSD = await calculateTokenUsdValue(
+      const balanceUSD = address === usdcAddress ? balanceNum : await calculateTokenUsdValue(
         address,
         balance,
         metadata.decimals,
+        usdcAddress,
         chainId,
         apiKey,
         api
       );
-      
+
       tokens.push({
         address,
         symbol: metadata.symbol,
@@ -181,7 +185,8 @@ export async function processTokenBalances(
         balance,
         balanceFormatted,
         balanceNum,
-        balanceUSD
+        balanceUSD,
+        native: address === NATIVE_TOKEN_ADDRESS
       });
       
       // Report completion for current token with detailed info
@@ -256,13 +261,17 @@ export function categorizeTokens(
   dustThreshold: number = 5,
   significantThreshold: number = 100
 ): TokenCategories {
-  const dustTokens = tokens.filter(token => token.balanceUSD < dustThreshold);
+  const nativeTokens = tokens.filter(token => token.native);
+
+  const dustTokens = tokens.filter(token => !token.native && token.balanceUSD < dustThreshold);
+
   const mediumTokens = tokens.filter(token => 
-    token.balanceUSD >= dustThreshold && token.balanceUSD < significantThreshold
+    !token.native && token.balanceUSD >= dustThreshold && token.balanceUSD < significantThreshold
   );
-  const significantTokens = tokens.filter(token => token.balanceUSD >= significantThreshold);
+
+  const significantTokens = tokens.filter(token => !token.native && token.balanceUSD >= significantThreshold);
   
-  return { dustTokens, mediumTokens, significantTokens };
+  return { nativeTokens, dustTokens, mediumTokens, significantTokens };
 }
 
 /**

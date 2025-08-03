@@ -3,10 +3,11 @@
  * Browser-compatible wallet operations
  */
 
-import { connect, disconnect, getAccount, getChainId, reconnect } from '@wagmi/core';
+import { connect, disconnect, getAccount, getChainId, reconnect, switchChain } from '@wagmi/core';
 import { createConfig, http } from 'wagmi';
 import { createStorage } from 'wagmi';
 import { injected, walletConnect } from 'wagmi/connectors';
+import { sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { SUPPORTED_CHAINS, getChainName } from '../core/chains.js';
 import { loadBrowserConfig } from './config.js';
 
@@ -15,6 +16,60 @@ export interface WebWalletSession {
   address: string;
   chainId: number;
   chainName: string;
+  sendTransaction?: (txData: {
+    to: string;
+    data: string;
+    value?: string;
+    gas?: string;
+    gasPrice?: string;
+    chainId?: number;
+  }) => Promise<string>;
+}
+
+/**
+ * Create sendTransaction function for wallet sessions
+ * Centralized implementation to avoid code duplication
+ */
+function createSendTransaction() {
+  return async (txData: {
+    to: string;
+    data: string;
+    value?: string;
+    gas?: string;
+    gasPrice?: string;
+    chainId?: number;
+  }) => {
+    // Switch to target chain if specified and different from current
+    if (txData.chainId) {
+      const currentChainId = getChainId(config);
+      if (currentChainId !== txData.chainId) {
+        console.log(`🔄 Switching from chain ${currentChainId} to chain ${txData.chainId}`);
+        try {
+          await switchChain(config, { chainId: txData.chainId });
+          console.log(`✅ Successfully switched to chain ${txData.chainId}`);
+        } catch (error) {
+          console.error(`❌ Failed to switch to chain ${txData.chainId}:`, error);
+          throw new Error(`Failed to switch to chain ${txData.chainId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+    }
+    
+    // Use Wagmi's sendTransaction for proper wallet integration
+    const hash = await sendTransaction(config, {
+      to: txData.to as `0x${string}`,
+      data: txData.data as `0x${string}`,
+      value: txData.value ? BigInt(txData.value) : undefined,
+      gas: txData.gas ? BigInt(txData.gas) : undefined,
+      gasPrice: txData.gasPrice ? BigInt(txData.gasPrice) : undefined
+    });
+    
+    // Wait for transaction receipt to ensure it's mined
+    await waitForTransactionReceipt(config, {
+      hash: hash
+    });
+    
+    return hash;
+  };
 }
 
 // Initialize Wagmi config
@@ -91,7 +146,8 @@ export async function connectWallet(): Promise<WebWalletSession> {
     const session: WebWalletSession = {
       address: result.accounts[0],
       chainId: result.chainId,
-      chainName: getChainName(result.chainId)
+      chainName: getChainName(result.chainId),
+      sendTransaction: createSendTransaction()
     };
     
     return session;
@@ -134,7 +190,8 @@ export function getCurrentSession(): WebWalletSession | null {
     return {
       address: account.address || '',
       chainId: chainId,
-      chainName: getChainName(chainId)
+      chainName: getChainName(chainId),
+      sendTransaction: createSendTransaction()
     };
   }
   return null;

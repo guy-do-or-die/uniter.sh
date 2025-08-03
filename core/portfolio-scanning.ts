@@ -11,6 +11,7 @@ import {
   categorizeTokens, 
   calculatePortfolioStats 
 } from './token-processing.js';
+import { storeScanResults } from './scan-storage.js';
 import { formatUsdValue } from './terminal/display.js';
 import type {
   WalletSession,
@@ -68,7 +69,12 @@ export async function scanTokens(
       message: `Fetching wallet balances`
     });
     
-    const balanceData = await api.getWalletBalances(session.chainId, session.address, config.oneinchApiKey);
+    const balanceResponse = await api.getWalletBalances(session.chainId, session.address, config.oneinchApiKey);
+
+    const balanceData = Object.fromEntries(
+      Object.entries(balanceResponse).filter(([_, balance]) => BigInt(balance) > 0n)
+    );
+
     const tokenCount = Object.keys(balanceData).length;
     
     // Report balance results
@@ -97,11 +103,10 @@ export async function scanTokens(
       chainName: chainInfo.name,
       chainId: session.chainId,
       metadataCount,
-      message: `Loaded metadata for ${metadataCount} tokens`
+      message: `Tokens metadata loaded`
     });
     
-    console.log('📊 Raw balance data:', tokenCount, 'tokens found');
-    console.log('📊 Token metadata:', metadataCount, 'tokens available');
+    console.log('Raw balance data:', tokenCount, 'tokens found');
 
     // Report processing phase
     config.onProgress?.({
@@ -150,7 +155,7 @@ export async function scanTokens(
     });
 
     // Categorize tokens by USD value
-    const { dustTokens, mediumTokens, significantTokens } = categorizeTokens(
+    const { nativeTokens, dustTokens, mediumTokens, significantTokens } = categorizeTokens(
       filteredTokens,
       dustThresholdUsd,
       100 // Significant threshold ($100)
@@ -168,8 +173,9 @@ export async function scanTokens(
       message: `Scan complete: ${filteredTokens.length} tokens valued ${formatUsdValue(totalUSD)}`
     });
 
-    // Return scan results
-    return {
+    // Create scan result
+    const scanResult = {
+      nativeTokens,
       allTokens: filteredTokens,
       dustTokens,
       mediumTokens,
@@ -185,6 +191,12 @@ export async function scanTokens(
         usdValue: token.balanceUSD
       }))
     };
+
+    // Store scan results for sweep command
+    storeScanResults(scanResult, session, 'single');
+
+    // Return scan results
+    return scanResult;
   } catch (error) {
     console.error(`❌ Scan failed for ${chainInfo.name}:`, error);
     throw new Error(`Scan failed for ${chainInfo.name}: ${(error as Error).message}`);
@@ -218,8 +230,7 @@ export async function scanTokensMultiChain(
   const results: TokenScanResult[] = [];
   
   console.log(`🔄 Starting multichain scan for address: ${session.address}`);
-  console.log(`🔄 Demo mode: ${session.isDemo ? 'Yes' : 'No'}`);
-  
+
   // Scan tokens on all supported chains
   const chains = getSupportedChains();
   for (let i = 0; i < chains.length; i++) {
@@ -240,7 +251,6 @@ export async function scanTokensMultiChain(
         chainId: chain.id,
         client: session.client,
         topic: session.topic,
-        isDemo: session.isDemo
       };
       
       const result = await scanTokens(walletSession, config, dustThresholdUsd, api);
@@ -261,6 +271,11 @@ export async function scanTokensMultiChain(
     } catch (error) {
       console.warn(`⚠️ Failed to scan ${chain.name}:`, (error as Error).message);
     }
+  }
+  
+  // Store multichain scan results for sweep command
+  if (results.length > 0) {
+    storeScanResults(results, session, 'multichain');
   }
   
   return results;

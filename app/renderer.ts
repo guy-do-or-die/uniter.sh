@@ -388,9 +388,6 @@ export class WebTerminalRenderer implements TerminalRenderer {
     // This catches input that might not be properly handled by onKey on mobile
     this.terminal.onData((data) => {
       const charCodes = Array.from(data).map(c => c.charCodeAt(0));
-      console.log('onData event:', JSON.stringify(data), 'charCodes:', charCodes);
-      
-      // Debug info logged to console only to avoid interfering with input
       
       // Block certain escape sequences that could move cursor
       if (data.includes('\x1b[') && (data.includes('A') || data.includes('B') || data.includes('C') || data.includes('D'))) {
@@ -409,21 +406,16 @@ export class WebTerminalRenderer implements TerminalRenderer {
                                    (now - this.lastProcessedTime) < 50;
       
       if (wasRecentlyProcessed) {
-        console.log('[DEBUG] Skipping duplicate onData for:', JSON.stringify(data));
         return; // Skip duplicate processing
       }
       
       // Mobile fallback: Handle Enter and Space if they weren't caught by onKey
       if (data === '\r' || data === '\n') {
-        console.log('Mobile fallback: Enter detected in onData');
-        console.log('[DEBUG] Processing Enter via onData fallback');
         this.handleEnter();
         return;
       }
       
       if (data === ' ') {
-        console.log('Mobile fallback: Space detected in onData');
-        console.log('[DEBUG] Processing Space via onData fallback');
         this.handlePrintableKey(' ');
         return;
       }
@@ -719,8 +711,7 @@ export class WebTerminalRenderer implements TerminalRenderer {
       // Complete network identifiers for scan command
       const input = parts[1].toLowerCase();
       const networkHits = this.networkIds.filter(network => network.startsWith(input));
-      const chainHits = this.chainNames.filter(chain => chain.startsWith(input));
-      const allHits = [...new Set([...networkHits, ...chainHits])];
+      const allHits = [...new Set([...networkHits])];
       
       if (allHits.length === 1) {
         // Single match - complete it

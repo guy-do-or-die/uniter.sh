@@ -15,6 +15,11 @@ export interface ApiImplementation {
   getTokenMetadata: typeof defaultApi.getTokenMetadata;
   getQuote: typeof defaultApi.getQuote;
   findUsdcAddress: typeof defaultApi.findUsdcAddress;
+  getSwap: typeof defaultApi.getSwap;
+  canSwapToken: typeof defaultApi.canSwapToken;
+  getApproveTransaction: typeof defaultApi.getApproveTransaction;
+  getCurrentAllowance: typeof defaultApi.getCurrentAllowance;
+  getSpenderAddress: typeof defaultApi.getSpenderAddress;
 }
 
 // ===== CONFIGURATION INTERFACES =====
@@ -62,7 +67,14 @@ export interface WalletSession {
   chainId: number;
   client?: any; // Optional for browser
   topic?: string; // Optional for browser
-  isDemo?: boolean; // Optional for demo mode
+  sendTransaction?: (txData: {
+    to: string;
+    data: string;
+    value?: string;
+    gas?: string;
+    gasPrice?: string;
+    chainId?: number;
+  }) => Promise<string>; // Returns transaction hash
 }
 
 // ===== TOKEN INTERFACES =====
@@ -79,12 +91,14 @@ export interface TokenBalance {
   balanceFormatted: string; // Human-readable balance
   balanceNum: number; // Numeric balance for calculations
   balanceUSD: number; // USD value
+  native: boolean;
 }
 
 /**
  * Token categorization result
  */
 export interface TokenCategories {
+  nativeTokens: TokenBalance[];
   dustTokens: TokenBalance[];
   mediumTokens: TokenBalance[];
   significantTokens: TokenBalance[];
@@ -104,6 +118,7 @@ export interface PortfolioStats {
  * Token scan result interface
  */
 export interface TokenScanResult {
+  nativeTokens: TokenBalance[];
   allTokens: TokenBalance[];
   dustTokens: TokenBalance[];
   mediumTokens: TokenBalance[];

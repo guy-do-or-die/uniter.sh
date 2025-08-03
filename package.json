@@ -10,6 +10,7 @@
   "scripts": {
     "build:web": "vite build",
     "build": "tsc && bun run build:web",
+    "dev:api": "vercel dev --listen 3001",
     "dev:cli": "bun run cli/cli.ts",
     "dev:web": "vite",
     "start:web": "vite preview",

@@ -1,115 +1,75 @@
 # 🦄 uniter.sh - Unified DeFi Terminal
 
-**Make tokens unitETH with 1inch!**
+**Unite all your onchain dust and scattered assets into ETH in one smart command**
 
-A powerful, cross-platform DeFi portfolio scanner that works in both CLI and web environments. Scan your multi-chain token holdings, get real-time USD valuations, and manage your DeFi portfolio with a beautiful terminal interface.
+A cross-platform DeFi portfolio scanner and token sweeper that works in both CLI and web environments. Scan multi-chain token holdings, get real-time USD valuations, and sweep dust tokens with 1inch integration.
 
 ## ✨ Features
 
-### 🌐 **Cross-Platform Support**
-- **CLI Terminal**: Full-featured command-line interface for power users
-- **Web Terminal**: Browser-based terminal with professional UX
-- **Unified Codebase**: Same scanning logic and display across all environments
-
-### 🔗 **Multi-Chain Portfolio Scanning**
-- **12+ Supported Chains**: Ethereum, Base, Arbitrum, Polygon, Avalanche, BNB Chain, Optimism, ZKsync Era, Linea, Gnosis, Sonic, Unichain
-- **Real-Time Pricing**: Powered by 1inch API with ETH/USDC base quotes
-- **Smart Categorization**: Significant, Medium, and Dust token classification
-- **Comprehensive Coverage**: Scans all token balances across supported networks
-
-### 💼 **Wallet Integration**
-- **WalletConnect v2**: Connect with any WalletConnect-compatible wallet
-- **MetaMask Support**: Direct browser extension integration
-- **Session Persistence**: Automatic reconnection across page reloads
-- **ENS Resolution**: Display ENS names instead of raw addresses
-
-### 🎨 **Professional Terminal UX**
-- **Tab Autocomplete**: Smart completion for commands and chain names
-- **Command History**: Navigate previous commands with arrow keys
-- **Responsive Design**: Works beautifully on desktop and mobile
-- **ANSI Art Support**: Rich terminal graphics and colors
-- **Optimized Input**: Smooth typing experience without cursor glitches
+- **Multi-Chain Scanning**: 12+ supported chains with real-time token discovery
+- **Smart Token Sweeping**: Convert dust tokens to native tokens using 1inch
+- **Cross-Platform**: Unified CLI and web terminal with identical functionality
+- **Professional UX**: Tab completion, command history, ANSI graphics
+- **WalletConnect Integration**: Connect any compatible wallet
+- **Session Persistence**: Automatic reconnection across sessions
 
 ## 🚀 Quick Start
 
 ### Web Terminal (Recommended)
-1. **Visit**: [uniter.sh](https://uniter.sh) (or run locally)
+1. **Visit**: [uniter.sh](https://uniter.sh) or run locally with `bun run dev:web`
 2. **Connect**: Type `connect` to link your wallet
 3. **Scan**: Use `scan base` or `multichain` to analyze your portfolio
-4. **Explore**: Try `help` to see all available commands
+4. **Sweep**: Use `sweep` to convert dust tokens to native tokens
 
 ### CLI Terminal
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/your-org/uniter.sh.git
 cd uniter.sh
+bun install
 
-# Install dependencies
-npm install
-
-# Set up environment variables
+# Set up environment
 cp .env.example .env
-# Add your API keys to .env
+# Add ONEINCH_API_KEY and VITE_REOWN_PROJECT_ID
 
 # Run CLI
-npm run cli
+bun run dev:cli
 ```
 
 ## 🔧 Development
 
 ### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-- 1inch API key (for token pricing)
-- WalletConnect Project ID (for wallet connections)
+- Bun (recommended) or Node.js 18+
+- 1inch API key
+- WalletConnect Project ID
 
 ### Environment Variables
 ```bash
-# Required for CLI
 ONEINCH_API_KEY=your_1inch_api_key
 VITE_REOWN_PROJECT_ID=your_walletconnect_project_id
-
-# Optional
-DEBUG=true  # Enable verbose logging
 ```
 
-### Local Development
+### Development Commands
 ```bash
-# Install dependencies
-npm install
-
-# Start web development server
-npm run dev
-
-# Run CLI version
-npm run cli
-
-# Build for production
-npm run build
-
-# Run tests
-npm test
+bun install              # Install dependencies
+bun run dev:web          # Start web dev server
+bun run dev:cli          # Run CLI version
+bun run build            # Build for production
+bun run test             # Run tests
 ```
 
 ### Project Structure
 ```
 uniter.sh/
-├── shared/           # Cross-platform core logic
-│   ├── api.ts       # Unified API layer
+├── core/            # Cross-platform core logic
+│   ├── api.ts       # 1inch API integration
 │   ├── chains.ts    # Chain configurations
-│   ├── scanner-core.ts
-│   ├── token-processor.ts
+│   ├── sweep.ts     # Token sweeping logic
+│   ├── portfolio-*.ts # Portfolio scanning & display
 │   └── terminal/    # Terminal engine
 ├── cli/             # CLI-specific code
-│   ├── cli.ts       # CLI entry point
-│   ├── adapter.ts   # CLI environment adapter
-│   └── wallet.ts    # CLI wallet management
 ├── app/             # Web app code
-│   ├── index.html   # Web terminal UI
-│   ├── main.ts      # Web app entry
-│   ├── adapter.ts   # Web environment adapter
-│   ├── wallet.ts    # Web wallet (Wagmi)
-│   └── renderer.ts  # Web terminal renderer
+├── api/             # Vercel API routes (proxy)
 └── dist-web/        # Built web assets
 ```
 
@@ -117,23 +77,26 @@ uniter.sh/
 
 ### Core Commands
 - `help` - Show all available commands
-- `connect` - Connect your wallet via WalletConnect
+- `about` - About uniter.sh
+- `connect` - Connect wallet via WalletConnect
 - `disconnect` - Disconnect current wallet
 - `status` - Show wallet connection status
 
-### Scanning Commands
+### Portfolio Commands
 - `scan [chain]` - Scan tokens on specific chain (e.g., `scan base`)
 - `multichain` - Scan tokens across all supported chains
-- `chains` - List all supported chains
+- `sweep` - Swap all dust tokens to native tokens
+- `unite [chain]` - Unite collected ETH to chain of choice
 
 ### Utility Commands
+- `chains` - List all supported chains
+- `key` - Set API key
 - `clear` - Clear terminal screen
-- `exit` / `quit` / `q` - Exit the terminal
+- `exit` / `quit` / `q` - Exit terminal
 
 ### Navigation
 - **Tab** - Auto-complete commands and chain names
 - **↑/↓ Arrow Keys** - Browse command history
-- **Ctrl+C (twice)** - Force quit (CLI only)
 
 ## 🌍 Supported Chains
 
@@ -160,82 +123,50 @@ uniter.sh/
 - **Local Session**: Wallet sessions stored locally only
 - **Open Source**: Full transparency of all code
 
-## 🛠 Technical Details
+## 🛠 Technical Stack
 
-### Architecture
-- **Unified Engine**: Single codebase for CLI and web
-- **Environment Adapters**: Platform-specific implementations
-- **Shared Logic**: Common scanning, pricing, and display code
-- **Modular Design**: Clean separation of concerns
-
-### APIs & Integrations
-- **1inch API**: Token discovery and pricing
+- **1inch API**: Token discovery, pricing, and swapping
 - **WalletConnect v2**: Wallet connection protocol
-- **Wagmi**: React hooks for Ethereum (web)
-- **Viem**: TypeScript interface for Ethereum
-- **xterm.js**: Terminal emulator for web
+- **Viem**: TypeScript Ethereum interface
+- **xterm.js**: Web terminal emulator
+- **TypeScript**: Full type safety
+- **Vercel**: Deployment and API proxy
 
-### Performance
-- **Async Scanning**: Non-blocking token discovery
-- **Efficient Pricing**: Minimal API calls with caching
-- **Smart Filtering**: Focus on significant token holdings
-- **Responsive UI**: Optimized for smooth user experience
-
-## 📊 Example Output
+## 📊 Example Usage
 
 ```bash
-🦄 uniter.sh Web Terminal — Make tokens unitETH with 1inch!
+🦄 uniter.sh Web Terminal
 
-          Type "help" to see available commands
-
-──────────────────────────────────────────────────────────────
-
-No wallet connected
-Use "connect" to connect your wallet
+unitl.eth@uniter.sh> connect
+✅ Wallet connected: 0x1234...5678
 
 unitl.eth@uniter.sh> multichain
-
 🔍 Scanning tokens across all chains...
-📊 Portfolio Summary: $1,234.56 across 15 tokens on 4 chains
+📊 Portfolio: $1,234.56 across 15 tokens on 4 chains
+
 
 💎 Significant Holdings ($50+):
   USDC    $456.78  (Base)
   ETH     $321.45  (Ethereum)
-  WETH    $234.56  (Arbitrum)
 
 💰 Medium Holdings ($5-$50):
   ARB     $23.45   (Arbitrum)
-  OP      $12.34   (Optimism)
 
-🪙 Total Tokens: 15
-⛓️ Chains Scanned: 4
-✅ Multichain scan complete!
+🪙 Dust Holdings (<$5): 8 tokens
+✅ Scan complete!
+
+unitl.eth@uniter.sh> sweep
+🧹 Sweeping 8 dust tokens...
+✅ Swapped 6 tokens successfully
+💰 Received 0.0234 ETH
 ```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Workflow
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 🔗 Links
-
-- **Website**: [uniter.sh](https://uniter.sh)
-- **GitHub**: [github.com/your-org/uniter.sh](https://github.com/your-org/uniter.sh)
-- **1inch**: [1inch.io](https://1inch.io)
-- **WalletConnect**: [walletconnect.com](https://walletconnect.com)
-
 ---
 
 **Made with ❤️ for the DeFi community**
 
-*uniter.sh - Making tokens unitETH, one scan at a time!*
+*Unite all your onchain dust and scattered assets into a single token in one smart command*
