@@ -3,27 +3,29 @@ import { proxyToOneInch, ProxyRequest } from './proxy.js';
 
 // Edge-compatible logging function
 async function edgeLog(level: 'info' | 'warn' | 'error', message: string, data?: any) {
-  // Option 1: Send to webhook (if WEBHOOK_URL is set)
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    data,
+    source: '1inch-api'
+  };
+  
+  // Send to webhook (if DEBUG_WEBHOOK_URL is set)
   const webhookUrl = process.env.DEBUG_WEBHOOK_URL;
   if (webhookUrl) {
     try {
       await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timestamp: new Date().toISOString(),
-          level,
-          message,
-          data,
-          source: '1inch-api'
-        })
+        body: JSON.stringify(logEntry)
       });
     } catch (e) {
-      // Fail silently for logging
+      // Fail silently for webhook logging
     }
   }
   
-  // Option 2: Still use console (works in some edge environments)
+  // Also use console as fallback
   const logFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
   logFn(`[${level.toUpperCase()}] ${message}`, data || '');
 }
