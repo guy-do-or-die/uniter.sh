@@ -72,7 +72,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Check if debug mode is enabled
     const isDebug = true;//req.query.debug === 'true';
-    console.log('🔧 DEBUG MODE ENABLED - isDebug =', isDebug);
+    await edgeLog('info', '🔧 DEBUG MODE ENABLED - Starting 1inch API request', {
+      method: req.method,
+      url: req.url,
+      query: req.query
+    });
     
     // Validate API key
     const apiKey = process.env.ONEINCH_API_KEY;
@@ -101,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (!pathMatch) {
       if (isDebug) {
-        console.warn(`⚠️ Invalid path format received: ${fullPath}`);
+        await edgeLog('warn', `⚠️ Invalid path format received: ${fullPath}`);
       }
       return res.status(400).json({ 
         error: 'Invalid path format',
@@ -206,9 +210,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (parseError) {
       // Return parse error info in response
       if (isDebug) {
-        console.warn(`⚠️ Failed to parse JSON response from 1inch API for ${apiPath}`);
-        console.warn(`⚠️ Parse error: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
-        console.warn(`⚠️ Raw data preview: ${proxyResponse.data.substring(0, 200)}`);
+        await edgeLog('warn', `⚠️ Failed to parse JSON response from 1inch API for ${apiPath}`, {
+          parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+          rawDataPreview: proxyResponse.data.substring(0, 200),
+        });
       }
       res.status(500).json({
         error: 'JSON parse failed',
@@ -220,7 +225,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
   } catch (error) {
-    console.error('Vercel proxy error:', error);
+    console.error('❌ Vercel proxy error:', error);
+    const isDebug = req.query.debug === 'true' || true; // Use same debug flag
+    if (isDebug) {
+      await edgeLog('error', `❌ Request failed for ${req.url}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        url: req.url,
+        method: req.method
+      });
+      
+      if (error instanceof Error && error.message.includes('timeout')) {
+        await edgeLog('warn', '⚠️ Request timed out - 1inch API may be slow or unavailable');
+      }
+      if (error instanceof Error && error.message.includes('ENOTFOUND')) {
+        await edgeLog('warn', '⚠️ DNS resolution failed - network connectivity issue');
+      }
+    }
     res.status(500).json({ 
       error: 'Proxy request failed',
       details: error instanceof Error ? error.message : 'Unknown error'
