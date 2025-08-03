@@ -50,15 +50,25 @@ export async function proxyToOneInch(
 
   console.log(`${logPrefix} Proxying ${request.method} request to: ${url.toString()}`);
   console.log(`🔑 Using API key: ${apiKey.substring(0, 8)}...`);
+  console.log(`🔍 DEBUG: Full URL breakdown:`, {
+    baseUrl,
+    path,
+    fullUrl: url.toString(),
+    searchParams: Object.fromEntries(url.searchParams),
+    method: request.method
+  });
 
   try {
-    // Make the request to 1inch API
+    // Make the request to 1inch API with robust headers for edge compatibility
     const response = await fetch(url.toString(), {
       method: request.method,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'User-Agent': 'uniter.sh/1.0 (https://uniter.sh)',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
         ...request.headers,
       },
       body: request.method !== 'GET' && request.body ? JSON.stringify(request.body) : undefined,

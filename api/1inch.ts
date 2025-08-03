@@ -160,11 +160,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       queryCount: Object.keys(req.query || {}).length,
       fullQueryObject: req.query,
       reconstructedUrl: `https://api.1inch.dev/${apiPath}`,
-      environment: process.env.VERCEL_ENV || 'unknown',
+      environment: 'production',
       region: process.env.VERCEL_REGION || 'unknown',
       nodeVersion: process.version,
       runtime: 'vercel-edge',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      isSearchRequest: apiPath.includes('/search'),
+      queryValue: req.query?.query,
+      fullRequestUrl: req.url,
+      userAgent: req.headers['user-agent'],
+      referer: req.headers.referer,
+      origin: req.headers.origin
     });
     
     const proxyStartTime = Date.now();
