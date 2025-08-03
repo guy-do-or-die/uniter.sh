@@ -143,12 +143,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endpointType: getEndpointType(apiPath)
     });
 
+    // Normalize query parameters for consistent edge/dev handling
+    const normalizedQuery: Record<string, string | string[]> = {};
+    if (req.query) {
+      Object.entries(req.query).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          // Ensure consistent string conversion for edge compatibility
+          normalizedQuery[key] = Array.isArray(value) ? value.map(String) : String(value);
+        }
+      });
+    }
+
     // Proxy request to 1inch API
     const proxyRequest: ProxyRequest = {
       url: fullPath,
       method: req.method || 'GET',
       body: req.body,
-      query: req.query
+      query: normalizedQuery
     };
     
     await logToWebhook('INFO', '📡 Initiating 1inch API request', {

@@ -38,11 +38,12 @@ export async function proxyToOneInch(
   const apiUrl = `${baseUrl}/${path}`;
   const url = new URL(apiUrl);
   
-  // Add query parameters
+  // Add query parameters with proper encoding for edge compatibility
   if (request.query) {
     Object.entries(request.query).forEach(([key, value]) => {
-      if (value) {
-        const paramValue = Array.isArray(value) ? value[0] : value;
+      if (value !== undefined && value !== null && value !== '') {
+        // Handle both array and string values, ensure proper string conversion
+        const paramValue = Array.isArray(value) ? value[0] : String(value);
         url.searchParams.append(key, paramValue);
       }
     });

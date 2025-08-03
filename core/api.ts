@@ -269,7 +269,7 @@ export async function findUsdcAddress(chainId: number, apiKey: string): Promise<
 
   try {
     const data: OneInchSearchResults = await makeOneInchRequest<OneInchSearchResults>(
-      `/token/v1.3/${chainId}/search?query=USDC`,
+      `/token/v1.3/${chainId}/search?query=USDC&limit=1`,
       apiKey,
       { description: `USDC search on chain ${chainId}` }
     );
@@ -293,7 +293,7 @@ export async function findUsdcAddress(chainId: number, apiKey: string): Promise<
         // Also cache in request-level cache
         REQUEST_USDC_CACHE[chainId] = token.address;
         return token.address;
-      }
+      }https://www.uniter.sh/
     }
 
     console.warn(`No USDC token found via search API on chain ${chainId}`);
