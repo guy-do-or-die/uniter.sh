@@ -244,7 +244,11 @@ export async function findUsdcAddress(
   // Check cache first
   const cached = USDC_ADDRESS_CACHE[chainId];
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log(`📦 DEBUG: Using cached USDC address for chain ${chainId}: ${cached.address}`);
+    if (cached.address === 'NOT_FOUND') {
+      console.log(`⏳ USDC search recently failed for chain ${chainId}, skipping retry`);
+      return null;
+    }
+    console.log(`✅ Using cached USDC address for chain ${chainId}: ${cached.address}`);
     return cached.address;
   }
   
@@ -281,7 +285,11 @@ export async function findUsdcAddress(
     }
 
     console.warn(`No USDC token found on chain ${chainId}`);
-    // Don't cache null results to allow retries
+    // Cache null results temporarily to prevent API spam (5 minute cooldown)
+    USDC_ADDRESS_CACHE[chainId] = {
+      address: 'NOT_FOUND',
+      timestamp: Date.now()
+    };
     return null;
   } catch (error) {
     console.warn(`Error searching for USDC on chain ${chainId}:`, (error as Error).message);
