@@ -2,32 +2,32 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { proxyToOneInch, ProxyRequest } from './proxy.js';
 
 // Edge-compatible logging function
-async function edgeLog(level: 'info' | 'warn' | 'error', message: string, data?: any) {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    data,
-    source: '1inch-api'
-  };
-  
-  // Send to webhook (if DEBUG_WEBHOOK_URL is set)
+async function logToWebhook(level: string, message: string, data?: any) {
   const webhookUrl = process.env.DEBUG_WEBHOOK_URL;
-  if (webhookUrl) {
-    try {
-      await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(logEntry)
-      });
-    } catch (e) {
-      // Fail silently for webhook logging
-    }
+  if (!webhookUrl) {
+    console.log(`[${level}] ${message}`, data || '');
+    return;
   }
-  
-  // Also use console as fallback
-  const logFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
-  logFn(`[${level.toUpperCase()}] ${message}`, data || '');
+
+  try {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      data: data || null,
+      environment: 'vercel-edge',
+      requestId: Math.random().toString(36).substring(7)
+    };
+
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logEntry)
+    });
+  } catch (error) {
+    // Fail silently to avoid disrupting main flow
+    console.log(`[${level}] ${message}`, data || '');
+  }
 }
 
 // Helper functions for debug analysis
@@ -53,105 +53,128 @@ function analyzeDataStructure(data: any): string {
   return typeof data;
 }
 
+function getStatusText(statusCode: number): string {
+  switch (statusCode) {
+    case 200:
+      return 'OK';
+    case 400:
+      return 'Bad Request';
+    case 401:
+      return 'Unauthorized';
+    case 403:
+      return 'Forbidden';
+    case 404:
+      return 'Not Found';
+    case 500:
+      return 'Internal Server Error';
+    default:
+      return 'Unknown Status Code';
+  }
+}
+
 /**
  * Vercel API route for 1inch proxy
  * Handles requests to /api/1inch with path parsing
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const requestId = Math.random().toString(36).substring(7);
+  const startTime = Date.now();
+  
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('X-Request-ID', requestId);
 
-  // Handle preflight requests
   if (req.method === 'OPTIONS') {
+    await logToWebhook('INFO', '🔄 CORS preflight request', { requestId });
     res.status(200).end();
     return;
   }
 
   try {
-    // Check if debug mode is enabled
-    const isDebug = true;//req.query.debug === 'true';
-    await edgeLog('info', '🔧 DEBUG MODE ENABLED - Starting 1inch API request', {
+    // Hardcoded debug mode for testing
+    const isDebug = true; // req.query.debug === 'true';
+    
+    await logToWebhook('INFO', '🚀 Request started', {
+      requestId,
       method: req.method,
       url: req.url,
-      query: req.query
+      userAgent: req.headers['user-agent'],
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      query: req.query,
+      bodySize: req.body ? JSON.stringify(req.body).length : 0
     });
-    
+
     // Validate API key
     const apiKey = process.env.ONEINCH_API_KEY;
     if (!apiKey) {
-      const availableKeys = Object.keys(process.env).filter(k => k.includes('ONEINCH'));
-      console.error('❌ ONEINCH_API_KEY not found in Vercel API route');
-      console.error('Available ONEINCH env vars:', availableKeys);
-      if (isDebug) {
-        console.warn('⚠️ API key missing - this will cause all 1inch requests to fail');
-      }
-      return res.status(500).json({ error: 'API key not configured' });
+      await logToWebhook('ERROR', '❌ ONEINCH_API_KEY not found', { requestId });
+      return res.status(500).json({ error: 'API key not configured', requestId });
     }
     
-    if (isDebug) {
-      await edgeLog('info', `✅ API key found in Vercel API route, length: ${apiKey.length}`);
-      if (apiKey.length < 32) {
-        await edgeLog('warn', '⚠️ API key seems unusually short, may be invalid');
-      }
-    }
+    await logToWebhook('INFO', '✅ API key validation', { 
+      requestId,
+      length: apiKey.length,
+      prefix: apiKey.substring(0, 8) + '...',
+      isValid: apiKey.length >= 32
+    });
 
-    // Parse the path from the URL
-    // URL will be like: /api/1inch/balance/v1.2/130/balances/0x...
-    // We need to extract: balance/v1.2/130/balances/0x...
+    // Parse the path
     const fullPath = req.url || '';
     const pathMatch = fullPath.match(/^\/api\/1inch\/(.+)$/);
-    
     if (!pathMatch) {
-      if (isDebug) {
-        await edgeLog('warn', `⚠️ Invalid path format received: ${fullPath}`);
-      }
-      return res.status(400).json({ 
-        error: 'Invalid path format',
-        expectedFormat: '/api/1inch/{1inch-api-path}',
-        receivedUrl: fullPath
+      await logToWebhook('ERROR', '❌ Invalid path format', { 
+        requestId,
+        fullPath,
+        expectedFormat: '/api/1inch/{path}'
       });
+      return res.status(400).json({ error: 'Invalid path format', receivedUrl: fullPath, requestId });
     }
-
     const apiPath = pathMatch[1];
-    if (isDebug) {
-      await edgeLog('info', `🔗 Extracted API path: ${apiPath}`);
-      
-      // Warn about potentially problematic paths
-      if (apiPath.includes('..') || apiPath.includes('//')) {
-        await edgeLog('warn', `⚠️ Suspicious path detected: ${apiPath}`);
-      }
-      if (!apiPath.includes('/v1.')) {
-        await edgeLog('warn', `⚠️ Path doesn't contain version info, may be invalid: ${apiPath}`);
-      }
-    }
+    
+    await logToWebhook('INFO', '🔗 Path parsing successful', { 
+      requestId,
+      apiPath, 
+      fullPath,
+      pathLength: apiPath.length,
+      hasVersion: apiPath.includes('/v1.'),
+      endpointType: getEndpointType(apiPath)
+    });
 
-    // Build proxy request
+    // Proxy request to 1inch API
     const proxyRequest: ProxyRequest = {
-      url: fullPath, // Use the original request URL
+      url: fullPath,
       method: req.method || 'GET',
       body: req.body,
       query: req.query
     };
-
-    // Use proxy utilities
-    if (isDebug) {
-      await edgeLog('info', `📡 Making 1inch API request: ${req.method} ${apiPath}`);
-    }
-    const proxyResponse = await proxyToOneInch(proxyRequest, apiKey, {
-      logPrefix: isDebug ? '🚀 Vercel' : undefined
+    
+    await logToWebhook('INFO', '📡 Initiating 1inch API request', {
+      requestId,
+      method: proxyRequest.method,
+      path: apiPath,
+      hasBody: !!proxyRequest.body,
+      queryParams: Object.keys(req.query || {}),
+      queryCount: Object.keys(req.query || {}).length
     });
     
-    // Warn about non-200 responses
-    if (isDebug) {
-      if (proxyResponse.status !== 200) {
-        await edgeLog('warn', `⚠️ 1inch API returned non-200 status: ${proxyResponse.status} for ${apiPath}`);
-      }
-      if (proxyResponse.data.length === 0) {
-        await edgeLog('warn', `⚠️ 1inch API returned empty response for ${apiPath}`);
-      }
-    }
+    const proxyStartTime = Date.now();
+    const proxyResponse = await proxyToOneInch(proxyRequest, apiKey, { logPrefix: '🚀 Vercel' });
+    const proxyDuration = Date.now() - proxyStartTime;
+    
+    await logToWebhook('INFO', '📥 1inch API response received', {
+      requestId,
+      status: proxyResponse.status,
+      statusText: getStatusText(proxyResponse.status),
+      dataLength: proxyResponse.data.length,
+      duration: `${proxyDuration}ms`,
+      contentType: proxyResponse.headers['content-type'],
+      dataPreview: proxyResponse.data.substring(0, 300),
+      isJson: proxyResponse.headers['content-type']?.includes('application/json'),
+      isEmpty: proxyResponse.data.length === 0
+    });
 
     // Set response headers with debug info
     res.status(proxyResponse.status);
@@ -160,91 +183,103 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('X-Debug-Length', proxyResponse.data.length.toString());
     res.setHeader('X-Debug-Path', apiPath);
     res.setHeader('X-Debug-Endpoint-Type', getEndpointType(apiPath));
-    
-    // Add debug warnings as headers when in debug mode
-    if (isDebug) {
-      const warnings = [];
-      if (apiKey && apiKey.length < 32) {
-        warnings.push('api-key-short');
-      }
-      if (apiPath.includes('..') || apiPath.includes('//')) {
-        warnings.push('suspicious-path');
-      }
-      if (!apiPath.includes('/v1.')) {
-        warnings.push('missing-version');
-      }
-      if (proxyResponse.status !== 200) {
-        warnings.push(`non-200-status-${proxyResponse.status}`);
-      }
-      if (proxyResponse.data.length === 0) {
-        warnings.push('empty-response');
-      }
-      
-      if (warnings.length > 0) {
-        res.setHeader('X-Debug-Warnings', warnings.join(','));
-      }
-    }
+    res.setHeader('X-Debug-Duration', `${proxyDuration}ms`);
+    res.setHeader('X-Debug-Request-ID', requestId);
 
-    // Try to parse as JSON, fallback to text
+    await logToWebhook('INFO', '🔄 Setting response headers and processing data', {
+      requestId,
+      responseStatus: proxyResponse.status,
+      contentType: proxyResponse.headers['content-type'],
+      willAttemptJsonParse: proxyResponse.headers['content-type']?.includes('json') || proxyResponse.data.trim().startsWith('{') || proxyResponse.data.trim().startsWith('[')
+    });
+
+    // Try parse JSON response
     try {
       const jsonData = JSON.parse(proxyResponse.data);
       
-      // Add debug information for ALL endpoints when debug=true
+      await logToWebhook('INFO', '✅ JSON parsing successful', {
+        requestId,
+        dataType: Array.isArray(jsonData) ? 'array' : typeof jsonData,
+        keys: Array.isArray(jsonData) ? jsonData.length : Object.keys(jsonData || {}).length,
+        structure: analyzeDataStructure(jsonData)
+      });
+      
       if (isDebug) {
         const debugInfo = {
           _debug: {
+            requestId,
             originalPath: apiPath,
             responseStatus: proxyResponse.status,
             dataLength: proxyResponse.data.length,
             endpointType: getEndpointType(apiPath),
             keys: Array.isArray(jsonData) ? ['array'] : Object.keys(jsonData),
             dataStructure: analyzeDataStructure(jsonData),
-            dataPreview: proxyResponse.data.substring(0, 500)
+            dataPreview: proxyResponse.data.substring(0, 500),
+            totalDuration: `${Date.now() - startTime}ms`,
+            proxyDuration: `${proxyDuration}ms`
           },
           ...jsonData
         };
+        
+        await logToWebhook('INFO', '📤 Sending debug response', {
+          requestId,
+          hasDebugInfo: true,
+          totalKeys: Object.keys(debugInfo).length
+        });
+        
         res.json(debugInfo);
       } else {
+        await logToWebhook('INFO', '📤 Sending production response', {
+          requestId,
+          hasDebugInfo: false
+        });
         res.json(jsonData);
       }
     } catch (parseError) {
-      // Return parse error info in response
-      if (isDebug) {
-        await edgeLog('warn', `⚠️ Failed to parse JSON response from 1inch API for ${apiPath}`, {
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-          rawDataPreview: proxyResponse.data.substring(0, 200),
-        });
-      }
-      res.status(500).json({
-        error: 'JSON parse failed',
-        parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-        rawData: proxyResponse.data.substring(0, 500),
+      await logToWebhook('ERROR', '❌ JSON parse failed', {
+        requestId,
         path: apiPath,
-        originalStatus: proxyResponse.status
+        parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+        dataPreview: proxyResponse.data.substring(0, 300),
+        originalStatus: proxyResponse.status,
+        dataLength: proxyResponse.data.length,
+        contentType: proxyResponse.headers['content-type'],
+        startsWithBrace: proxyResponse.data.trim().startsWith('{'),
+        startsWithBracket: proxyResponse.data.trim().startsWith('[')
+      });
+      
+      res.status(500).json({ 
+        error: 'JSON parse failed', 
+        parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error', 
+        rawData: proxyResponse.data.substring(0, 500), 
+        path: apiPath, 
+        originalStatus: proxyResponse.status,
+        requestId
       });
     }
 
   } catch (error) {
+    const totalDuration = Date.now() - startTime;
+    
+    await logToWebhook('ERROR', '❌ Vercel proxy error', {
+      requestId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack?.substring(0, 1000) : undefined,
+      url: req.url,
+      method: req.method,
+      totalDuration: `${totalDuration}ms`,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      isTimeout: error instanceof Error && error.message.includes('timeout'),
+      isDNSError: error instanceof Error && error.message.includes('ENOTFOUND'),
+      isNetworkError: error instanceof Error && (error.message.includes('fetch') || error.message.includes('network'))
+    });
+    
     console.error('❌ Vercel proxy error:', error);
-    const isDebug = req.query.debug === 'true' || true; // Use same debug flag
-    if (isDebug) {
-      await edgeLog('error', `❌ Request failed for ${req.url}`, {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        url: req.url,
-        method: req.method
-      });
-      
-      if (error instanceof Error && error.message.includes('timeout')) {
-        await edgeLog('warn', '⚠️ Request timed out - 1inch API may be slow or unavailable');
-      }
-      if (error instanceof Error && error.message.includes('ENOTFOUND')) {
-        await edgeLog('warn', '⚠️ DNS resolution failed - network connectivity issue');
-      }
-    }
     res.status(500).json({ 
-      error: 'Proxy request failed',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Proxy request failed', 
+      details: error instanceof Error ? error.message : 'Unknown error',
+      requestId,
+      duration: `${totalDuration}ms`
     });
   }
 }
